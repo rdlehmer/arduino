@@ -7,6 +7,8 @@
 #define SIGNAL_SYSTEM
 #define TURNOUT_SYSTEM
 #define SD_SYSTEM
+
+#define SERIALON 0
 //
 // Library Include Files
 //
@@ -283,25 +285,27 @@ void showExamine() {
     byte contents;
     for ( i = 0 ; i < bytesToShow ; i++ ) {
       if ( ( i % 8 ) == 0 ) {
-        Serial.print(baseAdd+i);
-        Serial.print(" | ");
+        if ( SERIALON ) {
+          Serial.print(baseAdd+i);
+          Serial.print(" | ");
+        }
       }
       EEPROM.get(baseAdd+i,contents);
       if ( consoleBuffer.startsWith("ex/h") ) {
-        Serial.print(contents,HEX);
+        if ( SERIALON ) Serial.print(contents,HEX);
       }
       else if ( consoleBuffer.startsWith("ex/s") ) {
-        Serial.print(char(contents));
+        if ( SERIALON ) Serial.print(char(contents));
       }
       else {
-        Serial.print(contents);
+        if ( SERIALON ) Serial.print(contents);
       }
-      Serial.print(" ");
+      if ( SERIALON ) Serial.print(" ");
       if ( (( i % 8 ) == 7 ) ) {
-        Serial.println();
+        if ( SERIALON ) Serial.println();
       }
     }
-    Serial.println();
+    if ( SERIALON ) Serial.println();
   }
 }
 
@@ -326,14 +330,16 @@ void scan_i2c() {
     Wire.beginTransmission(address);
     error = Wire.endTransmission();
     if ( error == 0 ) {
-      Serial.print("I2C device found at ");
-      if ( address < 16 )
-        Serial.print("0");
-      Serial.print(address);
-      Serial.println(" !");
+      if ( SERIALON ) { 
+        Serial.print("I2C device found at ");
+        if ( address < 16 )
+          Serial.print("0");
+        Serial.print(address);
+        Serial.println(" !");
+      }
       nDevices++;
     }
-    else if ( error == 4 ) {
+    else if (( error == 4 ) && ( SERIALON )) {
       Serial.print("Unknown error at address 0x");
       if ( address < 16 )
         Serial.print("0");
@@ -341,11 +347,12 @@ void scan_i2c() {
     }
   }
   
-  if ( nDevices == 0 )
-    Serial.println("No I2C devices found\n");
-  else
-    Serial.println("I2C Scan Done\n");
-
+  if ( SERIALON ) {
+    if ( nDevices == 0 )
+      Serial.println("No I2C devices found\n");
+    else
+      Serial.println("I2C Scan Done\n");
+  }
   delay(500);
 }
 
@@ -360,6 +367,8 @@ byte connectServer() {
   byte ipAddr[4];   
   byte serveripAddr[4];
 
+  static byte Efirst = 1;
+
   EEPROM.get(0, mac);
   EEPROM.get(8, ipAddr);
   EEPROM.get(12, serveripAddr);
@@ -370,26 +379,29 @@ byte connectServer() {
   Ethernet.begin(mac, ip);
 
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-    Serial.println("Ethernet Hardware Error");
+    if ( SERIALON ) Serial.println("Ethernet Hardware Error");
     while (true) {
       delay(1); // do nothing, no point running without Ethernet hardware
     }
   }
   while (Ethernet.linkStatus() == LinkOFF) {
-    Serial.println("Ethernet cable is not connected.");
+    if ( SERIALON ) Serial.println("Ethernet cable is not connected.");
     delay(500);
   }
 
   // give the Ethernet shield a second to initialize:
-  delay(1000);
-  Serial.println("connecting...");
+  if ( Efirst == 1 ) {
+//    delay(1000);
+    Efirst = 0;
+  }
+  if ( SERIALON ) Serial.println("connecting...");
 
   // if you get a connection, report back via serial:
   if (ret_val = client.connect(server, 2048)) {
-    Serial.println("connected");
+    if ( SERIALON ) Serial.println("connected");
   } else {
     // if you didn't get a connection to the server:
-    Serial.println("connection failed");
+    if ( SERIALON ) Serial.println("connection failed");
   }
 }
 
@@ -416,7 +428,7 @@ void setup() {
 // Start the Serial interface to the PC via USB
 //
   Serial.begin(9600); 
-  Serial.println("CMRS Signal and Turnout 20220327");
+  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20220327");
 
 //
 // Initialize the W5100 board configuration    
@@ -579,11 +591,13 @@ void loop_setup() {
 
 }
 
-
+static long reconnect_timer = 0;
 void loop_run() {
-  if ( run_first_time == 1 ) {
+  if (( run_first_time == 1 ) && ( reconnect_timer == 0 )) {
+    if ( SERIALON ) Serial.println("In loop_run");
     connectServer();
     run_first_time = 0;
+    reconnect_timer = 60000;
   }
   static int temp = 0;
   if (client.available()) {
@@ -591,8 +605,8 @@ void loop_run() {
     if ( c != 10 )
       receiveBuffer = String(receiveBuffer+String(c));
     if ( c == 10 ) {
-      Serial.print("Receive: ");
-      Serial.println(receiveBuffer);
+      if ( SERIALON ) Serial.print("Receive: ");
+      if ( SERIALON ) Serial.println(receiveBuffer);
       commandBuffer = receiveBuffer;
       receiveBuffer = String();
       processCommandBuffer();
@@ -618,8 +632,8 @@ void loop_run() {
       }
       else if (client.connected()) {
         client.print(String(consoleBuffer+String(inChar)));
-        Serial.print("CONSOLE SEND: ");
-        Serial.println(consoleBuffer);
+        if ( SERIALON ) Serial.print("CONSOLE SEND: ");
+        if ( SERIALON ) Serial.println(consoleBuffer);
       }
       consoleBuffer = String();
     }
@@ -627,12 +641,13 @@ void loop_run() {
 
   // if the server's disconnected, stop the client:
   if (!client.connected()) {
-    Serial.println();
-    Serial.println("disconnecting.");
+    if ( SERIALON ) Serial.println();
+    if ( SERIALON ) Serial.println("disconnecting.");
     client.stop();
     // do nothing:
     run_first_time = 1;
     jmri_running = 0;
+    reconnect_timer = 60000;
 //    while (true) {
 //      delay(1);
 //    }
@@ -644,6 +659,12 @@ void loop_run() {
   if ( currentTime < prevTime )
     prevTime = currentTime; // this takes care of rolling over the counter after 50 days
   if ( currentTime > prevTime + TIME_STEP ) {  // do I/O operations every 20ms
+    if ( reconnect_timer > 0 ) {
+      reconnect_timer -= TIME_STEP;
+    }
+    if ( reconnect_timer < 0 ) {
+      reconnect_timer = 0;
+    }
     if ( flipflop == 0 ) {
 #ifdef TURNOUT_SYSTEM
       readToggles();
@@ -665,9 +686,9 @@ void loop_run() {
       flipflop = 0;
     }
     prevTime += TIME_STEP;
-//    Serial.print(".");
+    if ( SERIALON ) Serial.print(".");
     if ( ( statusCounts % (1000/TIME_STEP) ) == (1000/TIME_STEP - 1) ) {
-//      Serial.println();
+      if ( SERIALON ) Serial.println();
       if ( flash == HIGH ) {
         flash = LOW;
       } else {
@@ -842,9 +863,9 @@ void sendDualStatusMessage(byte i) {
       else {
         tempStr = String(tempStr+" UNKNOWN");       
       }
-      Serial.print("Send: ");
-      Serial.println(tempStr);
-      client.println(tempStr);
+      if ( SERIALON ) Serial.print("Send: ");
+      if ( SERIALON ) Serial.println(tempStr);
+      if (client.connected()) client.println(tempStr);
     }
   }
 }
@@ -874,9 +895,9 @@ void sendQuadStatusMessage(byte i) {
       else {
         tempStr = String(tempStr+" UNKNOWN");       
       }
-      Serial.print("Send: ");
-      Serial.println(tempStr);
-      client.println(tempStr);
+      if ( SERIALON ) Serial.print("Send: ");
+      if ( SERIALON ) Serial.println(tempStr);
+      if (client.connected()) client.println(tempStr);
     }
   }
 }
@@ -889,6 +910,7 @@ void sendQuadStatusMessage(byte i) {
 ///////////////////////////////////////////////////////////////////////////////
 void readToggles() {
   int i;
+  if ( SERIALON ) Serial.println("call readToggles");
   for ( i = 0 ; i < 4*n_active[0] ; i++ ) {
     byte tempa,tempb;
     if ( i < 4 ) {
@@ -950,7 +972,7 @@ void setDualTurnouts() {
 }
 
 void setQuadTurnouts() {
-  int i;
+  int i,j;
   for ( i = 0; i < 4*n_active[2] ; i++ ) {
     if (( turnoutQuadToggles[i] != 0 ) && ( turnoutQuadToggles[i] != 255 )) {
       if (( stateToggle[turnoutQuadToggles[i]-1] == 1 ) 
@@ -1159,9 +1181,9 @@ void sendQuadSensorMessage(byte i) {
       else {
         tempStr = String(tempStr+" UNKNOWN");
       }
-      Serial.print("Send: ");
-      Serial.println(tempStr);
-      client.println(tempStr);
+      if ( SERIALON ) Serial.print("Send: ");
+      if ( SERIALON ) Serial.println(tempStr);
+      if (client.connected()) client.println(tempStr);
     }
   }
 }
@@ -1193,9 +1215,9 @@ void sendSensorMessage(byte i) {
       else {
         tempStr = String(tempStr+" UNKNOWN");
       }
-      Serial.print("Send: ");
-      Serial.println(tempStr);
-      client.println(tempStr);
+      if ( SERIALON ) Serial.print("Send: ");
+      if ( SERIALON ) Serial.println(tempStr);
+      if (client.connected()) client.println(tempStr);
     }
   }
 }
@@ -1400,9 +1422,9 @@ void sendSignalMessage(byte i) {
         default: tempStr = String(tempStr + " UNKNOWN");
                  break;                 
       }
-      Serial.print("Send: ");
-      Serial.println(tempStr);
-      client.println(tempStr);
+      if ( SERIALON ) Serial.print("Send: ");
+      if ( SERIALON ) Serial.println(tempStr);
+      if (client.connected()) client.println(tempStr);
     }
   }
 }
@@ -1457,14 +1479,14 @@ void writeSDCard() {
       myFile.close();
       Serial.println();
     }
-    else {
+    else if ( SERIALON ) {
       Serial.print("Error: unable to open file ");
       Serial.print(filename.c_str());
       Serial.println(" for write.");
     }
   }
   else {
-    Serial.println("Error: no filename");
+    if ( SERIALON ) Serial.println("Error: no filename");
   }
 }
 
@@ -1493,7 +1515,7 @@ void readSDCard() {
           tempData = (dataBuffer.substring(index1+1)).toInt();
           EEPROM.update(memAdd,tempData);
           if ( ( i % 64 ) == 63 ) {
-            Serial.print("#");
+            if ( SERIALON ) Serial.print("#");
           }
           dataBuffer = String();
           i++;
@@ -1501,25 +1523,25 @@ void readSDCard() {
       }
 // more to do here
       myFile.close();
-      Serial.println();
+      if ( SERIALON ) Serial.println();
     }
     else {
-      Serial.println("Error: Unable to open file for read.");
+      if ( SERIALON ) Serial.println("Error: Unable to open file for read.");
     }
   }
   else {
-    Serial.println("Error: no filename");
+    if ( SERIALON ) Serial.println("Error: no filename");
   }
 }
 
 void sdCardManager() {
   byte sdSystemDone = 0;
   if ( !SD.begin(4) ) {
-    Serial.println("No SD card present. Starting...");
+    if ( SERIALON ) Serial.println("No SD card present. Starting...");
     return;
   }
   else {
-    Serial.println("SD Card present. Starting console...(quit) to end.");
+    if ( SERIALON ) Serial.println("SD Card present. Starting console...(quit) to end.");
   }
 
   while ( sdSystemDone == 0 ) {
@@ -1557,6 +1579,7 @@ void sdCardManager() {
 void show_configuration() {
   int i;
   byte contents;
+  if ( SERIALON ) {
 //
 // EEPROM memory map
 //
@@ -1789,6 +1812,7 @@ void show_configuration() {
       Serial.print(val1);
       Serial.print(" - sensor ");
       Serial.println(val2);
+  }
   }
 // 
 }
