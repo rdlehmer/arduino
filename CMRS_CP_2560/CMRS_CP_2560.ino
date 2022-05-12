@@ -1,4 +1,4 @@
-// Version v0.3.1
+// Version v0.3.2
 // Ron Lehmer   2022-05-11
 //
 // For the Arduino Uno R3/Mega 2560
@@ -7,6 +7,7 @@
 #define SIGNAL_SYSTEM
 #define TURNOUT_SYSTEM
 #define SD_SYSTEM
+#define NETWORK_SYSTEM
 
 //
 // Library Include Files
@@ -144,7 +145,7 @@ struct QuadSensorObject {
 static byte flash;
 static byte jmri_running;
 
-static byte SERIALON = 0;
+static byte SERIALON = 1;
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -431,7 +432,7 @@ void setup() {
 // Start the Serial interface to the PC via USB
 //
   Serial.begin(9600); 
-  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20220327");
+  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20220511 v0.3.2");
 
 //
 // Initialize the W5100 board configuration    
@@ -692,7 +693,6 @@ void loop_run() {
     }
     prevTime += TIME_STEP;
     if ( ( statusCounts % (1000/TIME_STEP) ) == (1000/TIME_STEP - 1) ) {
-      if ( SERIALON ) Serial.println();
       if ( flash == HIGH ) {
         flash = LOW;
       } else {
@@ -918,7 +918,6 @@ void sendQuadStatusMessage(byte i) {
 ///////////////////////////////////////////////////////////////////////////////
 void readToggles() {
   int i;
-  if ( SERIALON ) Serial.println("call readToggles");
   for ( i = 0 ; i < 4*n_active[0] ; i++ ) {
     byte tempa,tempb;
     if ( i < 4 ) {
