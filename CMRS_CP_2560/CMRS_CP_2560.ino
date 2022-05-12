@@ -1,5 +1,5 @@
-// Version v0.3
-// Ron Lehmer   2022-03-27
+// Version v0.3.1
+// Ron Lehmer   2022-05-11
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -8,7 +8,6 @@
 #define TURNOUT_SYSTEM
 #define SD_SYSTEM
 
-#define SERIALON 0
 //
 // Library Include Files
 //
@@ -144,6 +143,8 @@ struct QuadSensorObject {
 
 static byte flash;
 static byte jmri_running;
+
+static byte SERIALON = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -356,6 +357,7 @@ void scan_i2c() {
   delay(500);
 }
 
+#ifdef NETWORK_SYSTEM
 ///////////////////////////////////////////////////////////////////////////////
 //
 // Internet Services
@@ -404,6 +406,7 @@ byte connectServer() {
     if ( SERIALON ) Serial.println("connection failed");
   }
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -593,8 +596,8 @@ void loop_setup() {
 
 static long reconnect_timer = 0;
 void loop_run() {
+#ifdef NETWORK_SYSTEM
   if (( run_first_time == 1 ) && ( reconnect_timer == 0 )) {
-    if ( SERIALON ) Serial.println("In loop_run");
     connectServer();
     run_first_time = 0;
     reconnect_timer = 60000;
@@ -612,6 +615,7 @@ void loop_run() {
       processCommandBuffer();
     }
   }
+#endif
 
   // as long as there are bytes in the serial queue,
   // read them and send them out the socket if it's open:
@@ -638,7 +642,7 @@ void loop_run() {
       consoleBuffer = String();
     }
   }
-
+#ifdef NETWORK_SYSTEM
   // if the server's disconnected, stop the client:
   if (!client.connected()) {
     if ( SERIALON ) Serial.println();
@@ -652,6 +656,7 @@ void loop_run() {
 //      delay(1);
 //    }
   }
+#endif
 
 #define TIME_STEP 50
   static byte flipflop = 0;
@@ -686,7 +691,6 @@ void loop_run() {
       flipflop = 0;
     }
     prevTime += TIME_STEP;
-    if ( SERIALON ) Serial.print(".");
     if ( ( statusCounts % (1000/TIME_STEP) ) == (1000/TIME_STEP - 1) ) {
       if ( SERIALON ) Serial.println();
       if ( flash == HIGH ) {
@@ -844,6 +848,7 @@ void sendRegularStatusMessages() {
 //
 ///////////////////////////////////////////////////////////////////////////////
 void sendDualStatusMessage(byte i) {
+#ifdef NETWORK_SYSTEM
   char tempstr[7];
   if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
     String tempStr;
@@ -868,6 +873,7 @@ void sendDualStatusMessage(byte i) {
       if (client.connected()) client.println(tempStr);
     }
   }
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -876,6 +882,7 @@ void sendDualStatusMessage(byte i) {
 //
 ///////////////////////////////////////////////////////////////////////////////
 void sendQuadStatusMessage(byte i) {
+#ifdef NETWORK_SYSTEM
   char tempstr[7];
   if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
     String tempStr;
@@ -900,6 +907,7 @@ void sendQuadStatusMessage(byte i) {
       if (client.connected()) client.println(tempStr);
     }
   }
+#endif
 }
 
 
@@ -1165,6 +1173,7 @@ void writeIndicators() {
 //
 ///////////////////////////////////////////////////////////////////////////////
 void sendQuadSensorMessage(byte i) {
+#ifdef NETWORK_SYSTEM
   char tempstr[7];
   if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
     String tempStr;
@@ -1186,6 +1195,7 @@ void sendQuadSensorMessage(byte i) {
       if (client.connected()) client.println(tempStr);
     }
   }
+#endif
 }
 
 
@@ -1199,6 +1209,7 @@ void sendQuadSensorMessage(byte i) {
 //
 ///////////////////////////////////////////////////////////////////////////////
 void sendSensorMessage(byte i) {
+#ifdef NETWORK_SYSTEM
   char tempstr[7];
   if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
     String tempStr;
@@ -1220,6 +1231,7 @@ void sendSensorMessage(byte i) {
       if (client.connected()) client.println(tempStr);
     }
   }
+#endif
 }
 
 
@@ -1395,6 +1407,7 @@ byte signalAspectToCode(String arg_string) {
 //
 ///////////////////////////////////////////////////////////////////////////////
 void sendSignalMessage(byte i) {
+#ifdef NETWORK_SYSTEM
   char tempstr[7];
   if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
     String tempStr;
@@ -1427,6 +1440,7 @@ void sendSignalMessage(byte i) {
       if (client.connected()) client.println(tempStr);
     }
   }
+#endif
 }
 
 #endif
