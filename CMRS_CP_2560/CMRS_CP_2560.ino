@@ -1,4 +1,4 @@
-// Version v0.3.2
+// Version v0.3.3
 // Ron Lehmer   2022-05-11
 //
 // For the Arduino Uno R3/Mega 2560
@@ -432,7 +432,7 @@ void setup() {
 // Start the Serial interface to the PC via USB
 //
   Serial.begin(9600); 
-  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20220511 v0.3.2");
+  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20220511 v0.3.3");
 
 //
 // Initialize the W5100 board configuration    
@@ -645,12 +645,12 @@ void loop_run() {
   }
 #ifdef NETWORK_SYSTEM
   // if the server's disconnected, stop the client:
-  if (!client.connected()) {
+  if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
     if ( SERIALON ) Serial.println();
     if ( SERIALON ) Serial.println("disconnecting.");
     client.stop();
     // do nothing:
-    run_first_time = 1;
+    run_first_time = 2;  //waiting for timer
     jmri_running = 0;
     reconnect_timer = 60000;
 //    while (true) {
@@ -665,11 +665,12 @@ void loop_run() {
   if ( currentTime < prevTime )
     prevTime = currentTime; // this takes care of rolling over the counter after 50 days
   if ( currentTime > prevTime + TIME_STEP ) {  // do I/O operations every 20ms
-    if ( reconnect_timer > 0 ) {
-      reconnect_timer -= TIME_STEP;
+    if ( ( reconnect_timer > 0 ) && ( run_first_time == 2 ) ) {
+      reconnect_timer = reconnect_timer - TIME_STEP;
     }
-    if ( reconnect_timer < 0 ) {
+    if ( reconnect_timer <= 0 ) {
       reconnect_timer = 0;
+      run_first_time = 1;
     }
     if ( flipflop == 0 ) {
 #ifdef TURNOUT_SYSTEM
