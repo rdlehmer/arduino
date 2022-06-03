@@ -1,5 +1,5 @@
-// Version v0.3.3
-// Ron Lehmer   2022-05-11
+// Version v0.3.4
+// Ron Lehmer   2022-05-14
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -328,7 +328,7 @@ void scan_i2c() {
   byte error, address;
   int nDevices;
   nDevices = 0;
-  for (address = 1; address < 127; address++) {
+  for (address = 8; address < 119; address++) { // limited to valid hardware addresses
     Wire.beginTransmission(address);
     error = Wire.endTransmission();
     if ( error == 0 ) {
@@ -355,7 +355,7 @@ void scan_i2c() {
     else
       Serial.println("I2C Scan Done\n");
   }
-  delay(500);
+  //delay(500); // remove wait to reduce time for turnouts to move.
 }
 
 #ifdef NETWORK_SYSTEM
