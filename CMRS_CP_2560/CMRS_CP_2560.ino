@@ -1,4 +1,4 @@
-// Version v0.3.5 beta 
+                                              // Version v0.3.5 beta 
 // Ron Lehmer   2022-06-04
 //
 // For the Arduino Uno R3/Mega 2560
@@ -729,15 +729,15 @@ void processCommandBuffer() {
       if ( tempStr == cmdLabel ) {
         if ( command.startsWith("CLOSED") ) {
           if ( stateQuadTurnout[i] != 0 ) {
-            stateQuadTurnout[i] = 0;
-            sendQuadStatusMessage(i);
+            stateQuadTurnout[i] = 0;    // v0.3.5 remove response to remote command
+//            sendQuadStatusMessage(i);
             EEPROM.update(QUADTURNOUT_STATE_BASEADD+i,byte(0));
             commandSlavedQuadTurnout(i);
           }
         } else if ( command.startsWith("THROWN") ) {
           if ( stateQuadTurnout[i] != 1 ) {
             stateQuadTurnout[i] = 1;
-            sendQuadStatusMessage(i);
+//            sendQuadStatusMessage(i); // v0.3.5 remove response to remote command
             EEPROM.update(QUADTURNOUT_STATE_BASEADD+i,byte(1));
             commandSlavedQuadTurnout(i);
           }          
