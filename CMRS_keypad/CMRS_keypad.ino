@@ -1,4 +1,5 @@
 
+
 // CMRS Keypad Turnout Controller
 // Version v0.1
 // Ron Lehmer   2021-07-10
@@ -15,26 +16,43 @@
 //
 // Library Include Files
 //
+#define BIGKEYPAD 1
+
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
 #include <PCF8574.h>
+#ifdef ADAFRUIT
+#include <Adafruit_MCP23017.h>
+#else
 #include <MCP23017.h>
+#endif
 #include <Wire.h>
 
 //
 // Instantiate Objects
 //
 PCF8574 pcf8574(0x020);
-MCP23017 mcp23017(0x026);
-LiquidCrystal_I2C LCDisplay(0x027, 16, 2);
+MCP23017 mcp23017 = MCP23017(0x026);
+LiquidCrystal_I2C LCDisplay(0x027, 20, 4);
 
 //
 // Declare global variables and constants
 //
-
+#ifdef BIGKEYPAD
 // Define the keypad pins
 const byte ROWS = 4; 
-const byte COLS = 3;
+const byte COLS = 4;
+
+char keys[ROWS][COLS] = {
+  {'1','4','7','*'},
+  {'2','5','8','0'},
+  {'3','6','9','#'},
+  {'A','B','C','D'}
+};
+#else
+// Define the keypad pins
+const byte ROWS = 4; 
+const byte COLS = 4;
 
 char keys[ROWS][COLS] = {
   {'1','2','3'},
@@ -42,63 +60,26 @@ char keys[ROWS][COLS] = {
   {'7','8','9'},
   {'*','0','#'}
 };
+#endif
 
-const int MAXYARDTRACKS = 10;
+
+const int MAXYARDTRACKS = 11;
 
 char scratchpad[3] = "00\0";
 int col_count = -1;
 int open_track = 0;
 unsigned long interlockTime;
 int interlockStatus = 0;
+byte track_power[MAXYARDTRACKS];
 
 int relay_thrown[22] = { 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, 7, -1, 8, -1, 9, -1, 10, -1 };
 int relay_closed[22] = { -1, 0, -1, 1, -1, 2, -1, 3, -1, 4, -1, 5, -1, 6, -1, 7, -1, 8, -1, 9, -1, 10 };
-
-void setup() {
-  Wire.begin();
-  Serial.begin(9600);
-  while (!Serial);
-  Serial.println("\nCMRS Keypad v0.2 20210710 R. Lehmer");
-  Serial.println("\nI2C Scanner");
-  scan_i2c();
-  keypad_init();
-  relay_init();
-  pcf8574.begin();
-  LCDisplay.begin(16,2);
-  LCDisplay_init();
-  recover();
-  interlockTime = millis();
-  Serial.println("\nSetup Complete");
-}
-
-void loop() {
-  char keystroke;
-  keystroke = read_keypad();
-  if ( keystroke != NULL ) {
-    Serial.print(keystroke);
-    if ( keystroke == '*' ) {
-      line_for_mainline();
-    }
-    else if ( keystroke == '#' ) {
-      line_for_yard(-1);
-    }
-    else {
-      update_scratchpad(keystroke);
-    }
-  }
-  scan_column();
-  if ( interlockStatus == 1 ) {
-    unsigned long elapsed = millis() - interlockTime;
-    if ( elapsed > 500 )
-      resetRelays();
-  }
-}
 
 void scan_i2c() {
   byte error, address;
   int nDevices;
 
-//  Serial.println("Scanning...");
+  Serial.println("Scanning...");
 
   nDevices = 0;
   for (address = 1; address < 127; address++) {
@@ -129,6 +110,7 @@ void scan_i2c() {
 }
 
 
+
 void keypad_init() {
   pcf8574.pinMode(P0, INPUT_PULLUP);
   pcf8574.pinMode(P1, INPUT_PULLUP);
@@ -137,6 +119,8 @@ void keypad_init() {
   pcf8574.pinMode(P4, OUTPUT, HIGH);
   pcf8574.pinMode(P5, OUTPUT, HIGH);
   pcf8574.pinMode(P6, OUTPUT, HIGH);
+  pcf8574.pinMode(P7, OUTPUT, HIGH);
+  
 //  Serial.println("keypad_init(): Done\n");
 }
 
@@ -145,16 +129,13 @@ void LCDisplay_init() {
   LCDisplay.backlight();
   LCDisplay.setCursor(0,0);
   LCDisplay.printstr("E Stockton\0");  
+  LCDisplay.setCursor(20,0);
+  LCDisplay.printstr("Power\0");
   update_scratchpad('0');
 }
 
-void relay_init() {
-  for (int i = 0; i < 16; i++ )
-    mcp23017.pinMode(i, OUTPUT, HIGH);
-}
-
 void recover() {
-  int temp;
+  byte temp;
   EEPROM.get(0,temp);
   Serial.print("\nEEPROM returned ");
   Serial.println(temp, DEC);
@@ -167,14 +148,25 @@ void recover() {
   else {
     EEPROM.put(0,0);
   }
+  for ( int i = 0; i < MAXYARDTRACKS; i++ ) {
+     EEPROM.get(i+2,temp);
+     if ( temp != 0 ) {
+        track_power[i] = 1; 
+        track_power_display(i,1);
+     }
+     else {
+        track_power[i] = 0;
+        track_power_display(i,0);
+     }
+  }
 }
 
 void scan_column() {
 #if 1
   col_count++;
-  if ( col_count > 2 ) col_count = 0;
+  if ( col_count > 3 ) col_count = 0;
   if ( col_count == 0 ) {
-    pcf8574.digitalWrite(P6, HIGH);
+    pcf8574.digitalWrite(P7, HIGH);
     pcf8574.digitalWrite(P4, LOW);
   }
   else if ( col_count == 1 ) {
@@ -184,6 +176,10 @@ void scan_column() {
   else if ( col_count == 2 ) {
     pcf8574.digitalWrite(P5, HIGH);
     pcf8574.digitalWrite(P6, LOW);        
+  }
+  else if ( col_count == 3 ) {
+    pcf8574.digitalWrite(P6, HIGH);
+    pcf8574.digitalWrite(P7, LOW);        
   }
 #endif
 //  pcf8574.digitalWrite(P6, HIGH);
@@ -257,6 +253,7 @@ void line_for_yard(int arg_val) {
     update_scratchpad('0');          
   }
   else {
+    Serial.print("\nLining for Track ");
     Serial.println(temp, DEC);
     LCDisplayClearSecondLine();
     LCDisplay.setCursor(0,1);
@@ -279,43 +276,101 @@ void LCDisplayClearSecondLine() {
 }
 
 void setTurnoutsForMainline() {
-#if 0
-  mcp23017.digitalWrite(0, LOW);
-  for (int i = 1; i < 16; i++ )
-    mcp23017.digitalWrite(i, HIGH);
-#endif
-  for (int i = 0; i < 16; i++ ) {
-    if ( relay_thrown[i] == 0 )
-      mcp23017.digitalWrite(i, LOW);
-    if ( relay_closed[i] > 0 )
-      mcp23017.digitalWrite(i, LOW);
-  }
-  interlockTime = millis();
-  interlockStatus = 1;
+
 }
 
 void setTurnoutsForTrack(int arg_track) {
-#if 0
-  mcp23017.digitalWrite(0, HIGH);
-  for (int i = 1; i < 16; i++ ) {
-    if ( i == arg_track )
-      mcp23017.digitalWrite(i, LOW);
-    else
-      mcp23017.digitalWrite(i, HIGH);
-  }
-#endif
-  for (int i = 0; i < 16; i++ ) {
-    if ( relay_thrown[i] == arg_track )
-      mcp23017.digitalWrite(i, LOW);
-    if ( ( relay_closed[i] >= 0 ) && ( relay_closed[i] != arg_track ) )
-      mcp23017.digitalWrite(i, LOW);
-  }
-  interlockTime = millis();
-  interlockStatus = 1;
+
 }
 
+void track_power_on() {
+   int temp;
+   temp = atoi(scratchpad);
+   if (( temp > 0 ) && ( temp <= MAXYARDTRACKS )) {
+      track_power[temp-1] = 1;
+      track_power_display(temp-1,1);
+      EEPROM.write(temp+1,1);
+   }
+   update_scratchpad('0');
+   update_scratchpad('0');
+}
+
+void track_power_off() {
+   int temp;
+   temp = atoi(scratchpad);
+   if (( temp > 0 ) && ( temp <= MAXYARDTRACKS )) {
+      track_power[temp-1] = 0;
+      track_power_display(temp-1,0);
+      EEPROM.write(temp+1,0);
+   }
+   update_scratchpad('0');
+   update_scratchpad('0');
+}
+
+void track_power_display(int arg_val, int arg_mode) {
+   int pos1,pos2;
+   if ( arg_val < 6 ) {
+      pos2 = 0;
+      pos1 = 28 + 2*arg_val;
+   }
+   else {
+      pos2 = 1;
+      pos1 = 28 + 2*(arg_val - 6);
+   }
+   LCDisplay.setCursor(pos1,pos2);
+   if ( arg_mode == 0 ) {
+      LCDisplay.printstr("  ");
+   }
+   else {
+      LCDisplay.printstr(itoa(arg_val+1,scratchpad,10));
+   }
+}
 void resetRelays() {
   for (int i = 0; i < 16; i++ )
     mcp23017.digitalWrite(i, HIGH);
   interlockStatus = 0;
+}
+
+void setup() {
+  Wire.begin();
+  Serial.begin(9600);
+  while (!Serial);
+  Serial.println("\nCMRS Keypad v0.4 20221117 R. Lehmer");
+  Serial.println("\nI2C Scanner");
+  scan_i2c();
+  keypad_init();
+  pcf8574.begin();
+  LCDisplay.begin(16,2);
+  LCDisplay_init();
+  mcp23017.writeRegister(MCP23017Register::GPIO_A, 0xFF);  //Reset port A 
+  mcp23017.writeRegister(MCP23017Register::GPIO_B, 0xFF);  //Reset port B
+  mcp23017.portMode(MCP23017Port::A, 0);          //Port A as output
+  mcp23017.portMode(MCP23017Port::B, 0);          //Port B as output
+  recover();
+  interlockTime = millis();
+  Serial.println("\nSetup Complete");
+}
+
+void loop() {
+  char keystroke;
+  keystroke = read_keypad();
+  if ( keystroke != NULL ) {
+    Serial.print(keystroke);
+    if (( keystroke == '*' ) || ( keystroke == 'D' )) {
+      line_for_mainline();
+    }
+    else if (( keystroke == '#' ) || ( keystroke == 'C' )) {
+      line_for_yard(-1);
+    }
+    else if ( keystroke == 'A' ) {
+       track_power_on();
+    }
+    else if ( keystroke == 'B' ) {
+       track_power_off();
+    }
+    else {
+      update_scratchpad(keystroke);
+    }
+  }
+  scan_column();
 }
