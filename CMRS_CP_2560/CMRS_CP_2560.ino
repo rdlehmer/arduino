@@ -1,5 +1,5 @@
-                                              // Version v0.3.7
-// Ron Lehmer   2023-02-05
+                                              // Version v0.4.0
+// Ron Lehmer   2023-02-06
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -432,7 +432,7 @@ void setup() {
 // Start the Serial interface to the PC via USB
 //
   Serial.begin(9600); 
-  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20230205 v0.3.7");
+  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20230206 v0.4.0");
 
 //
 // Initialize the W5100 board configuration    
