@@ -1,5 +1,5 @@
-                                              // Version v0.3.5 beta 
-// Ron Lehmer   2022-06-04
+                                              // Version v0.3.7
+// Ron Lehmer   2023-02-05
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -432,7 +432,7 @@ void setup() {
 // Start the Serial interface to the PC via USB
 //
   Serial.begin(9600); 
-  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20220511 v0.3.5");
+  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20230205 v0.3.7");
 
 //
 // Initialize the W5100 board configuration    
@@ -450,7 +450,7 @@ void setup() {
 //
 // Scan I2C bus and report devices
 //
-//  scan_i2c();  // v0.3.5 remove from normal startup
+  scan_i2c();  // v0.3.7 re-enabled
 
 //
 // Get board types from EEPROM (addresses 16 - 21)  
@@ -516,19 +516,23 @@ void setup() {
     EEPROM.get(QUADTURNOUT_STATE_BASEADD+i,temp);
     if (temp == 1) {
       if ( i < 4 ) {
-        turnoutA.pinMode(i, OUTPUT, LOW);
+        turnoutA.pinMode(2*i, OUTPUT, LOW);
+        turnoutA.pinMode(2*i+1, OUTPUT, HIGH);
       }
       else if ( i < 8 ) {
-        turnoutB.pinMode(i-4, OUTPUT, LOW);
+        turnoutB.pinMode(2*(i-4), OUTPUT, LOW);
+        turnoutB.pinMode(2*(i-4)+1, OUTPUT, HIGH);
       }
       stateQuadTurnout[i] = 1;
     }
     else {
       if ( i < 4 ) {
-        turnoutA.pinMode(i, OUTPUT, HIGH);
+        turnoutA.pinMode(2*i, OUTPUT, HIGH);
+        turnoutA.pinMode(2*i+1, OUTPUT, LOW);
       }
       else if ( i < 8 ) {
-        turnoutB.pinMode(i-4, OUTPUT, HIGH);
+        turnoutB.pinMode(2*(i-4), OUTPUT, HIGH);
+        turnoutB.pinMode(2*(i-4)+1, OUTPUT, LOW);
       }
       stateQuadTurnout[i] = 0;
     }    
@@ -908,6 +912,10 @@ void sendQuadStatusMessage(byte i) {
       if (client.connected()) client.println(tempStr);
     }
   }
+#if 0
+  Serial.print("Send - ");
+  Serial.println(i);
+#endif
 #endif
 }
 
@@ -1034,18 +1042,22 @@ void writeQuadTurnouts() {
   for ( i = 0 ; i < 4*tempNumber ; i++ ) {
     if (stateQuadTurnout[i] == 1 ) {
       if ( i < 4 ) {
-        turnoutA.digitalWrite(i, LOW);
+        turnoutA.digitalWrite(2*i, LOW);
+        turnoutA.digitalWrite(2*i+1, HIGH);
       }
       else if ( i < 8 ) {
-        turnoutB.digitalWrite(i-4, LOW);
+        turnoutB.digitalWrite(2*(i-4), LOW);
+        turnoutB.digitalWrite(2*(i-4)+1, HIGH);
       }
     }
     else {
       if ( i < 4 ) {
-        turnoutA.digitalWrite(i, HIGH);
+        turnoutA.digitalWrite(2*i, HIGH);
+        turnoutA.digitalWrite(2*i+1, LOW);
       }
       else if ( i < 8 ) {
-        turnoutB.digitalWrite(i-4, HIGH);
+        turnoutB.digitalWrite(2*(i-4), HIGH);
+        turnoutB.digitalWrite(2*(i-4)+1, LOW);
       }
     }
   }
@@ -1062,14 +1074,15 @@ void readQuadSensors() {
   for ( i = 0 ; i < N_QUADSENSORS ; i++ ) {
     EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*i, quadSensor);
     if ( (quadSensor.boardNumber != 0) && (quadSensor.boardNumber <= n_active[2]) 
-        && (quadSensor.sensorChannel != 0) && (quadSensor.sensorChannel <= 12) 
+        && (quadSensor.sensorChannel != 0) && (quadSensor.sensorChannel <= 8) 
         && (quadSensor.sensorNumber != 0) && (quadSensor.sensorNumber != 255)) {
       byte temp = 0;
       switch ( quadSensor.boardNumber ) {
-        case 1: temp = turnoutA.digitalRead(quadSensor.sensorChannel+3);
+        case 1: temp = turnoutA.digitalRead(quadSensor.sensorChannel+7);
               break;
-        case 2: temp = turnoutB.digitalRead(quadSensor.sensorChannel+3);
+        case 2: temp = turnoutB.digitalRead(quadSensor.sensorChannel+7);
               break;
+// sensorChannel definition changed for Rev C and beyond boards
       }
       if ( temp == LOW ) {
         stateQuadSensor[i] = 1;
@@ -1683,7 +1696,7 @@ void show_configuration() {
     }
   }
 //  192   201   Turnout Quad Sensor 1 [ 0 - board ( 0 is off, 1-4 ), 1 - sensor 
-//                              ( 0 is off, 1-12 ), [2-8] Name, 9 - Sensor num ]
+//                              ( 0 is off, 1-8 ), [2-8] Name, 9 - Sensor num ]
 //  202   211   Turnout Quad Sensor 2
 //  212   221   Turnout Quad Sensor 3
 //  222   231   Turnout Quad Sensor 4
@@ -1865,7 +1878,7 @@ void show_configuration() {
 //  176   183   Turnout Quad 4/3
 //  184   191   Turnout Quad 4/4
 //  192   201   Turnout Quad Sensor 1 [ 0 - board ( 0 is off, 1-4 ), 1 - sensor 
-//                              ( 0 is off, 1-12 ), [2-8] Name, 9 - Sensor num ]
+//                              ( 0 is off, 1-8 ), [2-8] Name, 9 - Sensor num ]
 //  202   211   Turnout Quad Sensor 2
 //  212   221   Turnout Quad Sensor 3
 //  222   231   Turnout Quad Sensor 4
