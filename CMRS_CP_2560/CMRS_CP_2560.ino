@@ -1,5 +1,5 @@
-                                              // Version v0.4.0
-// Ron Lehmer   2023-02-06
+                                              // Version v0.4.1
+// Ron Lehmer   2023-03-04
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -432,7 +432,7 @@ void setup() {
 // Start the Serial interface to the PC via USB
 //
   Serial.begin(9600); 
-  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20230206 v0.4.0");
+  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20230304 v0.4.1");
 
 //
 // Initialize the W5100 board configuration    
@@ -1040,7 +1040,7 @@ void writeQuadTurnouts() {
   byte tempNumber;
   EEPROM.get(18,tempNumber);
   for ( i = 0 ; i < 4*tempNumber ; i++ ) {
-    if (stateQuadTurnout[i] == 1 ) {
+    if (stateQuadTurnout[i] == 0 ) {
       if ( i < 4 ) {
         turnoutA.digitalWrite(2*i, LOW);
         turnoutA.digitalWrite(2*i+1, HIGH);
