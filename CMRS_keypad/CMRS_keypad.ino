@@ -1,9 +1,11 @@
 
 // CMRS Keypad Turnout Controller
-// Version v0.1
-// Ron Lehmer   2021-07-10
+// Version v0.2
+// Ron Lehmer   2023-09-03
 //
-// For the Arduino Uno R3
+// For the Arduino Uno R3/2560 Mega
+//
+//  Updated for 4x4 keypad testing
 //
 // Package/library dependencies for Arduino Library manager
 //
@@ -24,8 +26,8 @@
 //
 // Instantiate Objects
 //
-PCF8574 pcf8574(0x020);
-MCP23017 mcp23017(0x026);
+PCF8574 pcf8574(0x026);
+MCP23017 mcp23017(0x020);
 LiquidCrystal_I2C LCDisplay(0x027, 16, 2);
 
 //
@@ -34,13 +36,13 @@ LiquidCrystal_I2C LCDisplay(0x027, 16, 2);
 
 // Define the keypad pins
 const byte ROWS = 4; 
-const byte COLS = 3;
+const byte COLS = 4;
 
 char keys[ROWS][COLS] = {
-  {'1','2','3'},
-  {'4','5','6'},
-  {'7','8','9'},
-  {'*','0','#'}
+  {'1','4','7','*'},
+  {'2','5','8','0'},
+  {'3','6','9','#'},
+  {'A','B','C','D'}
 };
 
 const int MAXYARDTRACKS = 10;
@@ -71,11 +73,11 @@ void setup() {
   Serial.println("\nSetup Complete");
 }
 
+
 void loop() {
   char keystroke;
   keystroke = read_keypad();
   if ( keystroke != NULL ) {
-    Serial.print(keystroke);
     if ( keystroke == '*' ) {
       line_for_mainline();
     }
@@ -87,11 +89,13 @@ void loop() {
     }
   }
   scan_column();
-  if ( interlockStatus == 1 ) {
+#if 0
+    if ( interlockStatus == 1 ) {
     unsigned long elapsed = millis() - interlockTime;
     if ( elapsed > 500 )
       resetRelays();
   }
+#endif
 }
 
 void scan_i2c() {
@@ -137,6 +141,7 @@ void keypad_init() {
   pcf8574.pinMode(P4, OUTPUT, HIGH);
   pcf8574.pinMode(P5, OUTPUT, HIGH);
   pcf8574.pinMode(P6, OUTPUT, HIGH);
+  pcf8574.pinMode(P7, OUTPUT, HIGH);
 //  Serial.println("keypad_init(): Done\n");
 }
 
@@ -172,18 +177,30 @@ void recover() {
 void scan_column() {
 #if 1
   col_count++;
-  if ( col_count > 2 ) col_count = 0;
+  if ( col_count > 3 ) col_count = 0;
   if ( col_count == 0 ) {
+    pcf8574.digitalWrite(P7, HIGH);
     pcf8574.digitalWrite(P6, HIGH);
+    pcf8574.digitalWrite(P5, HIGH);
     pcf8574.digitalWrite(P4, LOW);
   }
   else if ( col_count == 1 ) {
+    pcf8574.digitalWrite(P7, HIGH);
+    pcf8574.digitalWrite(P6, HIGH);
+    pcf8574.digitalWrite(P5, LOW);
     pcf8574.digitalWrite(P4, HIGH);
-    pcf8574.digitalWrite(P5, LOW);    
   }
   else if ( col_count == 2 ) {
+    pcf8574.digitalWrite(P7, HIGH);
+    pcf8574.digitalWrite(P6, LOW);
     pcf8574.digitalWrite(P5, HIGH);
-    pcf8574.digitalWrite(P6, LOW);        
+    pcf8574.digitalWrite(P4, HIGH); 
+  }
+  else if ( col_count == 3 ) {
+    pcf8574.digitalWrite(P7, LOW);
+    pcf8574.digitalWrite(P6, HIGH);
+    pcf8574.digitalWrite(P5, HIGH);
+    pcf8574.digitalWrite(P4, HIGH);
   }
 #endif
 //  pcf8574.digitalWrite(P6, HIGH);
@@ -216,6 +233,7 @@ char read_keypad() {
     ret_val = keys[row][col_count];
     if ( ret_val != last_char ) {
       last_char = ret_val;
+      Serial.print(last_char);
     }
     else {
       ret_val = NULL;
