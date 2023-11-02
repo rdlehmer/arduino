@@ -1,6 +1,6 @@
 
-// SFPL Control V0.1
-// Ron Lehmer   2023-09-27
+// SFPL Control V0.2
+// Ron Lehmer   2023-11-01
 //
 // For the Arduino Uno R3
 //
@@ -108,27 +108,21 @@ void setup() {
   
   initPins();
 
-//  timers[0] = new SFPL_Timer(0,15000,30000);
-//  timers[1] = new SFPL_Timer(0,15000,15000);
-//  timers[2] = new SFPL_Timer(0,60000,60000);
-//  timers[3] = new SFPL_Timer(0,60000,60000);
-
-  timers[0].set_on_time(60000);
+  timers[0].set_on_time(150000);
   timers[0].set_off_time(60000);
   timers[0].set_delay_time(0);
-  timers[1].set_on_time(60000);
+  timers[1].set_on_time(150000);
   timers[1].set_off_time(60000);
   timers[1].set_delay_time(1000);
-  timers[2].set_on_time(60000);
+  timers[2].set_on_time(150000);
   timers[2].set_off_time(60000);
   timers[2].set_delay_time(2000);
-  timers[3].set_on_time(60000);
+  timers[3].set_on_time(150000);
   timers[3].set_off_time(60000);
   timers[3].set_delay_time(3000);
   
   delay(3000);
   Serial.begin(9600);
-//  timer1.set();
 }
 
 
