@@ -1,8 +1,10 @@
-                                              // Version v0.4.1
-// Ron Lehmer   2023-03-04
+                                              // Version v0.4.3
+// Ron Lehmer   2023-11-17
 //
 // For the Arduino Uno R3/Mega 2560
 //
+
+#define DEBUG_1
 
 #define SIGNAL_SYSTEM
 #define TURNOUT_SYSTEM
@@ -432,18 +434,20 @@ void setup() {
 // Start the Serial interface to the PC via USB
 //
   Serial.begin(9600); 
-  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20230304 v0.4.1");
+  if ( SERIALON ) Serial.println("CMRS Signal and Turnout 20231117 v0.4.3");
 
 //
 // Initialize the W5100 board configuration    
 //  
   Ethernet.init(10); // Arduino Ethernet board SS  
 #ifdef SD_SYSTEM
+  Serial.println("Starting SD System...");
   sdCardManager();
 #endif
 //  
 // Start the I2C Bus
 //
+  Serial.println("Starting I2C System...");
   Wire.setClock(100000);  // Slow mode 10kHz // Normal mode 100kHz
   Wire.begin();
 
@@ -456,7 +460,6 @@ void setup() {
 // Get board types from EEPROM (addresses 16 - 21)  
 //
   EEPROM.get(I2C_BASEADD, n_active);
-
   if ( ( 2*n_active[4] ) > N_SIGNALS ) {
     n_active[4] = 0;
   }
@@ -508,11 +511,11 @@ void setup() {
 // Get turnout control data from EEPROM (which toggle controls and 
 // last commanded state of turnout)
 // Also set pins to outputs
- 
+
+// Quad Turnouts
+
   for ( i = 0; i < 4*n_active[2]; i++ ) {
-    turnoutQuadToggles[i] = EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i);  
-//    Serial.println("turnoutQuadToggles");
-//    Serial.println(turnoutQuadToggles[i]); 
+    turnoutQuadToggles[i] = EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i);
     EEPROM.get(QUADTURNOUT_STATE_BASEADD+i,temp);
     if (temp == 1) {
       if ( i < 4 ) {
@@ -535,9 +538,19 @@ void setup() {
         turnoutB.pinMode(2*(i-4)+1, OUTPUT, LOW);
       }
       stateQuadTurnout[i] = 0;
-    }    
+    } 
+#ifdef DEBUG_1
+    Serial.print("Quad Turnout ");
+    Serial.print(i);
+    Serial.print(" turnoutQuadToggles ");
+    Serial.print(turnoutQuadToggles[i]);
+    Serial.print(" saved state ");
+    Serial.println(stateQuadTurnout[i]);  
+#endif 
   }
-    
+
+// Dual Turnouts
+
   for ( i = 0; i < 2*n_active[5]; i++ ) {
     turnoutToggles[i] = EEPROM.read(TURNOUT_BASEADD+SIZE_OF_TURNOUT*i);   
     EEPROM.get(TURNOUT_STATE_BASEADD+i,temp);
@@ -579,6 +592,7 @@ void setup() {
   } 
 //  signal1.begin();
 #endif
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -686,14 +700,16 @@ void loop_run() {
       flipflop = 1;
     }
     else {
+#ifdef TURNOUT_SYSTEM
       setTurnouts();
       writeTurnouts();
       setIndicators();
       writeIndicators();
- #ifdef SIGNAL_SYSTEM
+#endif
+#ifdef SIGNAL_SYSTEM
       setSignals();
       writeSignals();
- #endif
+#endif
       flipflop = 0;
     }
     prevTime += TIME_STEP;
@@ -706,7 +722,7 @@ void loop_run() {
     }
     statusCounts++;
   }
-  if ( ( statusCounts % (60000/TIME_STEP) ) == (60000/TIME_STEP -1) ) { // send status to network every 60 seconds
+  if ( ( statusCounts % (60000/TIME_STEP) ) == (60000/TIME_STEP - 1) ) { // send status to network every 60 seconds
     sendRegularStatusMessages();
     statusCounts = 0;
   }
@@ -945,12 +961,14 @@ void readToggles() {
     else {
       stateToggle[i] = 0;
     }
-#if 0
-    if ( stateTogglePrev[i] != stateToggle[i] ) {
-      Serial.print(i);
-      Serial.print(" ");
-      Serial.println(stateToggle[i]);
-    }
+#ifdef DEBUG_1
+      if ( stateTogglePrev[i] != stateToggle[i] ) {
+        Serial.print(i);
+        Serial.print(" ");
+        Serial.print(stateToggle[i]);
+        Serial.print(" ");
+        Serial.println(stateTogglePrev[i]);
+      }
 #endif
     stateTogglePrev[i] = stateToggle[i];
   }
@@ -993,15 +1011,37 @@ void setQuadTurnouts() {
     if (( turnoutQuadToggles[i] != 0 ) && ( turnoutQuadToggles[i] != 255 )) {
       if (( stateToggle[turnoutQuadToggles[i]-1] == 1 ) 
            && ( stateQuadTurnout[i] != 1 )) {
+#ifdef DEBUG_1
+        for ( j = 0; j < 4*n_active[2] ; j++ ) {
+          Serial.print(turnoutQuadToggles[j]);
+          Serial.print(" "); 
+        }
+        Serial.println();
+        for ( j = 0; j < 4*n_active[0] ; j++ ) {
+          Serial.print(stateToggle[j]);
+          Serial.print(" "); 
+        }
+        Serial.println();
+#endif
         stateQuadTurnout[i] = 1;
         sendQuadStatusMessage(i);
         EEPROM.update(QUADTURNOUT_STATE_BASEADD+i,byte(1));
+#ifdef DEBUG_1
+        Serial.print("Quad Turnout ");
+        Serial.print(i);
+        Serial.println(" set to 1");
+#endif
       }
       if (( stateToggle[turnoutQuadToggles[i]-1] == -1 ) 
            && ( stateQuadTurnout[i] != 0 )) {
         stateQuadTurnout[i] = 0;
         sendQuadStatusMessage(i);
         EEPROM.update(QUADTURNOUT_STATE_BASEADD+i,byte(0));
+#ifdef DEBUG_1
+        Serial.print("Quad Turnout ");
+        Serial.print(i);
+        Serial.println(" set to 0");
+#endif
       }
     } 
   }
@@ -1584,6 +1624,9 @@ void sdCardManager() {
         else if ( consoleBuffer.startsWith("dep") ) {
           depositData();
         }
+        else if ( consoleBuffer.startsWith("conf") ) {
+          show_configuration();
+        }
         else if ( consoleBuffer.startsWith("write") ) {
           writeSDCard();
         }
@@ -1619,7 +1662,11 @@ void show_configuration() {
     if ( i < 5 ) Serial.print("-");
   }
   Serial.println();
-//  006   007   undefined
+//  006         Debug mode
+  EEPROM.get(6,contents);
+  Serial.print("Debug Mode ");
+  Serial.println(contents);
+//  007         undefined
 //  008   011   IP address of Controller
   Serial.print("IP address: ");
   for ( i = 8 ; i < 12; i++ ) {
@@ -1679,7 +1726,8 @@ void show_configuration() {
 //  168   175   Turnout Quad 4/2
 //  176   183   Turnout Quad 4/3
 //  184   191   Turnout Quad 4/4
-  for ( i = 0; i < 4*n_active[2] ; i++ ) {
+  EEPROM.get(18,contents);
+  for ( i = 0; i < 4*contents ; i++ ) {
     byte val;
     StringObject val2;
     EEPROM.get(QUADTURNOUT_BASEADD + SIZE_OF_TURNOUT*i,val);
@@ -1712,7 +1760,7 @@ void show_configuration() {
 //  322   331   Turnout Quad Sensor 14
 //  332   341   Turnout Quad Sensor 15
 //  342   351   Turnout Quad Sensor 16
-  for ( i = 0 ; i < 4*n_active[2] ; i++ ) {
+  for ( i = 0 ; i < 4*contents ; i++ ) {
     QuadSensorObject sen;
     EEPROM.get( QUADTURNOUT_SENSOR_BASEADD + SIZE_OF_QUADTURNOUT_SENSOR*i, sen);
     if (( sen.sensorNumber > 0 ) && (sen.sensorNumber < 255)) {
@@ -1734,7 +1782,8 @@ void show_configuration() {
 //  392   399   Turnout Dual 3/2
 //  400   407   Turnout Dual 4/1
 //  408   415   Turnout Dual 4/2
-  for ( i = 0; i < 2*n_active[5] ; i++ ) {
+  EEPROM.get(21,contents);
+  for ( i = 0; i < 2*contents ; i++ ) {
     byte val;
     StringObject val2;
     EEPROM.get(TURNOUT_BASEADD + SIZE_OF_TURNOUT*i,val);
@@ -1766,7 +1815,8 @@ void show_configuration() {
 //  520   527   Sensor 14
 //  528   535   Sensor 15
 //  536   543   Sensor 16
-  for ( i = 0; i < 4*n_active[1] ; i++ ) {
+  EEPROM.get(17,contents);
+  for ( i = 0; i < 4*contents ; i++ ) {
     byte val;
     StringObject val2;
     EEPROM.get(SENSOR_BASEADD + SIZE_OF_SENSOR*i,val);
@@ -1797,7 +1847,8 @@ void show_configuration() {
 //  856   879   Signal 4/2
 //  880   903   Signal 4/3
 //  904   927   Signal 4/4
-  for ( i = 0; i < 4*n_active[4] ; i++ ) {
+  EEPROM.get(20,contents);
+  for ( i = 0; i < 4*contents ; i++ ) {
     SignalObject sig;
     EEPROM.get(SIGNAL_BASEADD + SIZE_OF_SIGNAL*i,sig);
     if (1) {
@@ -1827,7 +1878,8 @@ void show_configuration() {
 //  938   939   Indicator 2/2
 //  940   941   Indicator 2/3
 //  942   943   Indicator 2/4
-  for ( i = 0 ; i < 4*n_active[3] ; i++ ) {
+  EEPROM.get(19,contents);
+  for ( i = 0 ; i < 4*contents ; i++ ) {
       byte val1, val2;
       EEPROM.get(928+(2*i),val1);
       EEPROM.get(929+(2*i),val2);
@@ -1849,7 +1901,8 @@ void show_configuration() {
 //
 // start  end     Function
 //  000   005   MAC Address (hex)
-//  006   007   undefined
+//  006         Debug Level
+//  007         undefined
 //  008   011   IP address of Controller
 //  012   015   IP address of JMRI SimpleServer (running port 2048)
 //  016         Number of Toggle Boards starting with add 32 (32 - 33)
