@@ -3,6 +3,8 @@
 /// Global defines
 ///
 
+#define DBGLVL1
+
 #define SD_SYSTEM
 
 #define QUADTURNOUT_STATE_BASEADD 40
@@ -24,6 +26,7 @@
 #define INDICATOR_BASEADD 928
 #define SIZE_OF_INDICATOR 2
 
+#define TIME_STEP 50
 ///
 /// Global Includes
 ///
@@ -34,10 +37,15 @@
 #include <SPI.h>
 #include <SD.h>
 #endif
+#include <Wire.h>
+#include <PCF8574.h>
 
 ///
 /// Global variables
 ///
+
+PCF8574 toggle1(32);
+PCF8574 toggle2(33);
 
 String consoleBuffer;
 struct StringObject {
@@ -60,6 +68,108 @@ struct QuadSensorObject {
   byte sensorNumber;
 };
 
+static unsigned long prevTime = 0;
+
+///
+/// Classes
+///
+
+class cmrs_toggle {
+  public:
+    cmrs_toggle() {
+     _state = 0;
+    }
+    ~cmrs_toggle() {
+    }
+    void set(int arg) {
+      if ( arg > 0 ) {
+        _state = 1;
+      }
+      else if ( arg < 0 ) {
+        _state = -1;
+      }
+      else {
+        _state = 0;
+      }
+    }
+    int get() {
+      return _state;
+    }
+  private:
+    int _state;
+};
+
+class CMRStoggles {
+  public:
+    CMRStoggles() {
+    }
+    ~CMRStoggles() {
+    }
+    void init() {
+      byte temp;
+      int i;
+      EEPROM.get(16,temp);
+      _boards = int(temp);
+#ifdef DBGLVL1
+      Serial.print("INIT: Initializing ");
+      Serial.print(_boards);
+      Serial.println(" Toggle boards.");
+#endif
+      if ( _boards > 0 ) {
+        for ( i = 0; i < 8; i++ ) {
+          toggle1.pinMode(i, INPUT_PULLUP);
+          if ( _boards > 1 ) toggle2.pinMode(i, INPUT_PULLUP);
+        }
+      }
+    }
+    void scan() {
+      int i;
+      byte tempa,tempb;
+      for ( i = 0 ; i < 4*_boards ; i++ ) {
+        if ( i < 4 ) {
+          tempa = toggle1.digitalRead(2*i);
+          tempb = toggle1.digitalRead(2*i+1);
+        } else if ( i < 8 ) {
+          tempa = toggle2.digitalRead(2*(i-4));
+          tempb = toggle2.digitalRead(2*(i-4)+1);
+        }
+        if ( tempa == LOW ) {
+          toggles[i].set(1);       
+        }
+        else if ( tempb == LOW ) {
+          toggles[i].set(-1);
+        }
+        else {
+          toggles[i].set(0);
+        }
+#ifdef DBGLVL1
+        if ( prevtoggles[i].get() != toggles[i].get() ) {
+          Serial.print(i);
+          Serial.print(" ");
+          Serial.print(toggles[i].get());
+          Serial.print(" ");
+          Serial.println(prevtoggles[i].get());
+        }
+#endif
+        prevtoggles[i].set(toggles[i].get());
+      }
+    }
+    int getToggle(int arg) {
+      return toggles[arg].get();
+    }
+  private:
+    cmrs_toggle toggles[8];
+    cmrs_toggle prevtoggles[8];
+    int _boards;
+};
+
+///
+/// Class instantianion
+///
+CMRStoggles TheToggles;
+
+
+
 ///
 ///  BEGIN SETUP
 ///
@@ -72,6 +182,12 @@ void setup() {
   Ethernet.init(10); // Arduino Ethernet board SS  
   sdCardManager();
 #endif
+  Serial.println("Starting I2C System...");
+  Wire.setClock(100000);  // Slow mode 10kHz // Normal mode 100kHz
+  Wire.begin();
+  scan_i2c();
+
+  TheToggles.init();
 }
 
 ///
@@ -80,7 +196,14 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
+  unsigned long currentTime = millis();
+  if ( currentTime < prevTime )
+    prevTime = currentTime; 
+  if ( currentTime > ( prevTime + TIME_STEP ) ) {
+    TheToggles.scan();
 
+    prevTime += TIME_STEP;
+  }
 }
 
 
@@ -626,6 +749,42 @@ byte hexToByte(char arg_char) {
 }
 
 #endif
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// I2C Utility
+//
+///////////////////////////////////////////////////////////////////////////////
+void scan_i2c() {
+  byte error, address;
+  int nDevices;
+  nDevices = 0;
+  for (address = 8; address < 119; address++) { // limited to valid hardware addresses
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+    if ( error == 0 ) {
+      Serial.print("I2C device found at ");
+      if ( address < 16 )
+        Serial.print("0");
+      Serial.print(address);
+      Serial.println(" !");
+      nDevices++;
+    }
+    else if ( error == 4 ) {
+      Serial.print("Unknown error at address 0x");
+      if ( address < 16 )
+        Serial.print("0");
+      Serial.println(address, HEX);
+    }
+  }
+  
+  if ( nDevices == 0 )
+    Serial.println("No I2C devices found\n");
+  else
+    Serial.println("I2C Scan Done\n");
+
+  //delay(500); // remove wait to reduce time for turnouts to move.
+}
 
 //
 // EEPROM memory map
