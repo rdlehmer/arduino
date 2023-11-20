@@ -12,6 +12,10 @@
 
 #define SD_SYSTEM
 
+#define ADDRESS_NUMBER_TOGGLE_BOARDS 16
+#define ADDRESS_NUMBER_QUADTURNOUT_BOARDS 18
+#define ADDRESS_NUMBER_INDICATOR_BOARDS 19
+
 #define QUADTURNOUT_STATE_BASEADD 40
 #define TURNOUT_STATE_BASEADD 56
 
@@ -87,6 +91,16 @@ static unsigned long prevTime = 0;
 /// Classes
 ///
 
+///
+/// cmrs_toggle - instantiate a toggle switch 
+///  _state - last observed state
+///		0 - neutral
+///		1 - throw
+///     2 - close
+///  set(byte) - sets state
+///  get()     - returns state
+///
+
 class cmrs_toggle {
   public:
     cmrs_toggle() {
@@ -104,6 +118,13 @@ class cmrs_toggle {
     byte _state;
 };
 
+///
+/// CMRStoggles - collection of toggle switches
+///  init()           - initializes boards defined
+///  scan()           - reads inputs from Toggle boards and sets individual toggles
+///  getToggles(byte) - get state of i-th toggle
+///
+
 class CMRStoggles {
   public:
     CMRStoggles() {
@@ -113,7 +134,7 @@ class CMRStoggles {
     void init() {
       byte temp;
       int i;
-      EEPROM.get(16,temp);
+      EEPROM.get(ADDRESS_NUMBER_TOGGLE_BOARDS,temp);
       _boards = int(temp);
 #ifdef DBGLVL1
       Serial.print("INIT: Initializing ");
@@ -169,6 +190,14 @@ class CMRStoggles {
     cmrs_toggle prevtoggles[8];
     int _boards;
 };
+
+///
+/// cmrs_turnout - turnout class
+///  init() - set up hardware boards and read in saved state from memory
+///  set(byte) - take active toggle commmand and determine if switch needs to change
+///              and calls private methods to throw or close switch
+///  getControl() - returns which toggle channel controls switch locally
+///
 
 class cmrs_turnout {
   public:
@@ -293,6 +322,79 @@ class cmrs_turnout {
     byte _control_channel;
 };
 
+///
+/// CMRSquadSensor
+///
+
+class CMRSquadSensors {
+  public:
+    CMRSquadSensors() {
+    }
+    ~CMRSquadSensors() {
+    }
+    void init() {
+      byte temp;
+      int i;
+      EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
+      _boards = int(temp);
+#ifdef DBGLVL1
+      Serial.print("INIT: Initializing ");
+      Serial.print(_boards);
+      Serial.println(" Quad sensor overlays.");
+#endif
+      if ( _boards > 0 ) {
+        for ( i = 0; i < 8; i++ ) {
+          turnoutA.pinMode(i+8, INPUT_PULLUP);
+          if ( _boards > 1 ) turnoutB.pinMode(i+8, INPUT_PULLUP);
+          if ( _boards > 2 ) turnoutC.pinMode(i+8, INPUT_PULLUP);
+        }
+      }
+    }
+    void scan() {
+      QuadSensorObject quadSensorObj;
+      int i;
+      for ( i = 0 ; i < 16 ; i++ ) {
+        EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*i, quadSensorObj);
+        if ( (quadSensorObj.boardNumber != 0) && (quadSensorObj.boardNumber <= _boards) 
+             && (quadSensorObj.sensorChannel != 0) && (quadSensorObj.sensorChannel <= 8) 
+             && (quadSensorObj.sensorNumber != 0) && (quadSensorObj.sensorNumber != 255)) {
+          byte temp = 0;
+          switch ( quadSensorObj.boardNumber ) {
+            case 1: temp = turnoutA.digitalRead(quadSensorObj.sensorChannel+7);
+              break;
+            case 2: temp = turnoutB.digitalRead(quadSensorObj.sensorChannel+7);
+              break;
+            case 3: temp = turnoutC.digitalRead(quadSensorObj.sensorChannel+7);
+              break;
+ // sensorChannel definition changed for Rev C and beyond boards
+          }
+          if ( temp == LOW ) {
+            quadSensor[i].set(1);
+          } else {
+            quadSensor[i].set(0);
+          }
+          prevquadSensor[i].set(quadSensor[i].get());
+        }
+      }
+    }
+    int getQuadSensor(int arg) {
+      return quadSensor[arg].get();
+    }
+  private:
+    cmrs_toggle quadSensor[16];
+    cmrs_toggle prevquadSensor[16];
+    int _boards;
+};
+
+
+
+///
+/// CMRSturnouts - collection of turnouts
+///  init() - initialize turnout boards and channels
+///  getControl(byte) - returns the toggle channel for i-th turnout
+///  setControl(byte,byte) - sends the state (j) for the i-th turnout
+///
+
 class CMRSturnouts {
   public:
     CMRSturnouts() {
@@ -302,7 +404,7 @@ class CMRSturnouts {
     void init() {
       byte temp;
       int i;
-      EEPROM.get(18,temp);
+      EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
       _boards = int(temp);
 #ifdef DBGLVL1
       Serial.print("INIT: Initializing ");
@@ -321,7 +423,7 @@ class CMRSturnouts {
     void setControl(byte arg, byte val) {
       turnout[arg].set(val);
     }
-
+#if 0
     void show() {
       int i;
       if ( _boards > 0 ) {
@@ -335,11 +437,18 @@ class CMRSturnouts {
         }
       }
     }
+#endif
   private:
     int _boards;
     cmrs_turnout turnout[12];
 };
 
+///
+/// cmrs_indicator - indicator
+///  init(byte) - sets the channel number
+///  set(byte)  - sets the hardware state of the indicator
+///  get()      - returns the state of the indicator
+///
 
 class cmrs_indicator {
   public:
@@ -390,6 +499,12 @@ class cmrs_indicator {
     byte _channel;
 };
 
+///
+/// CMRSindicators - collection of indicators
+///  init() - initialize hardware indicator boards and indicator channel numbers
+///  set(byte,byte) - sets the i-th indicator with state j
+///
+
 class CMRSindicators {
   public:
     CMRSindicators() {
@@ -401,7 +516,7 @@ class CMRSindicators {
     void init() {
       byte temp;
       int i;
-      EEPROM.get(19,temp);
+      EEPROM.get(ADDRESS_NUMBER_INDICATOR_BOARDS, temp);
       _boards = int(temp);
 #ifdef DBGLVL1
       Serial.print("INIT: Initializing ");
@@ -429,9 +544,11 @@ class CMRSindicators {
 ///
 /// Class instantation
 ///
-CMRStoggles    TheToggles;
-CMRSturnouts   TheTurnouts;
-CMRSindicators TheIndicators;
+
+CMRStoggles     TheToggles;
+CMRSturnouts    TheTurnouts;
+CMRSindicators  TheIndicators;
+CMRSquadSensors TheQuadSensors;
 
 
 ///
@@ -453,6 +570,7 @@ void setup() {
 
   TheToggles.init();
   TheTurnouts.init();
+  TheQuadSensors.init();
 //  TheTurnouts.show();
   TheIndicators.init();
 }
@@ -469,15 +587,25 @@ void loop() {
     TheToggles.scan();
     setTurnouts();
     setIndicators();
-
+    TheQuadSensors.scan();
+    
     prevTime += TIME_STEP;
   }
 }
 
+///
+/// setTurnouts - scans through the turnouts 
+///   loop through turnouts
+///   get toggle number that controls turnout
+///   If turnout is active ( control > 0 ) then
+///     get toggle state
+///     pass it turnout if state is other than neutral
+///
+
 void setTurnouts() {
   byte temp;
   int i;
-  EEPROM.get(18,temp);
+  EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
   for ( i = 0 ; i < 4*temp ; i++ ) {
     byte _control, _state;
 //    _control = TheTurnouts.getControl(i);
@@ -508,11 +636,18 @@ void setTurnouts() {
   } 
 }
 
+///
+/// setIndicators - set indicators
+///  scan for source of indicator information
+///   directly from turnout state (first memory value) unless it is set to 0
+///   then take state data from the j-th Sensor element
+///
+
 void setIndicators() {
   int i;
   byte _control[2];
   byte _boards,temp;
-  EEPROM.get(19,_boards);
+  EEPROM.get(ADDRESS_NUMBER_INDICATOR_BOARDS, _boards);
   for ( i = 0; i < 4*_boards; i++ ) {
     EEPROM.get(INDICATOR_BASEADD+2*i,_control);
     if ( _control[0] != 0 ) {
@@ -527,17 +662,21 @@ void setIndicators() {
     }
     else if ( _control[1] != 0 ) {
 //    TBD - sensors
+      temp = TheQuadSensors.getQuadSensor(_control[1]-1);
+      TheIndicators.set(i,temp+1);
     }
     else {
       TheIndicators.set(i,0);
     }
   }
 }
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // EEPROM Initialization
 //
 ///////////////////////////////////////////////////////////////////////////////
+
 void eeprom_init() {
   int i,j;
   byte temp;
@@ -575,6 +714,12 @@ void eeprom_init() {
 
 
 #ifdef SD_SYSTEM
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// SD Card System
+//
+///////////////////////////////////////////////////////////////////////////////
 
 void writeSDCard() {
   int index1,i;
@@ -792,7 +937,7 @@ void show_configuration() {
     }
   }
 //  192   201   Turnout Quad Sensor 1 [ 0 - board ( 0 is off, 1-4 ), 1 - sensor 
-//                              ( 0 is off, 1-8 ), [2-8] Name, 9 - Sensor num ]
+//                              ( 0 is off, 1-8, 1&2 with turnout 1, etc. ), [2-8] Name, 9 - Sensor num ]
 //  202   211   Turnout Quad Sensor 2
 //  212   221   Turnout Quad Sensor 3
 //  222   231   Turnout Quad Sensor 4
