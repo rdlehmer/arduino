@@ -4,6 +4,7 @@
 ///
 
 #define DBGLVL1
+//#define DBGLVL2
 
 #define SD_SYSTEM
 
@@ -39,6 +40,7 @@
 #endif
 #include <Wire.h>
 #include <PCF8574.h>
+#include <MCP23017.h>
 
 ///
 /// Global variables
@@ -46,6 +48,9 @@
 
 PCF8574 toggle1(32);
 PCF8574 toggle2(33);
+MCP23017 turnoutA(36);
+MCP23017 turnoutB(37);
+MCP23017 turnoutC(38);
 
 String consoleBuffer;
 struct StringObject {
@@ -81,22 +86,25 @@ class cmrs_toggle {
     }
     ~cmrs_toggle() {
     }
-    void set(int arg) {
-      if ( arg > 0 ) {
+    void set(byte arg) {
+      _state = arg;
+#if 0      
+      if ( arg = 1 ) {
         _state = 1;
       }
-      else if ( arg < 0 ) {
-        _state = -1;
+      else if ( arg = 2 ) {
+        _state = 2;
       }
       else {
         _state = 0;
       }
+#endif
     }
-    int get() {
+    byte get() {
       return _state;
     }
   private:
-    int _state;
+    byte _state;
 };
 
 class CMRStoggles {
@@ -120,6 +128,8 @@ class CMRStoggles {
           toggle1.pinMode(i, INPUT_PULLUP);
           if ( _boards > 1 ) toggle2.pinMode(i, INPUT_PULLUP);
         }
+        toggle1.begin();
+        if ( _boards > 1 ) toggle2.begin();
       }
     }
     void scan() {
@@ -137,12 +147,12 @@ class CMRStoggles {
           toggles[i].set(1);       
         }
         else if ( tempb == LOW ) {
-          toggles[i].set(-1);
+          toggles[i].set(2);
         }
         else {
           toggles[i].set(0);
         }
-#ifdef DBGLVL1
+#ifdef DBGLVL2
         if ( prevtoggles[i].get() != toggles[i].get() ) {
           Serial.print(i);
           Serial.print(" ");
@@ -163,10 +173,181 @@ class CMRStoggles {
     int _boards;
 };
 
+class cmrs_turnout {
+  public:
+    cmrs_turnout() {
+      _state = 0;
+      _channel = 0;
+    }
+    ~cmrs_turnout() {
+    }
+    void init(byte i, byte j) {
+      byte temp;
+      _control_channel = j;
+      _channel = i+1;
+      EEPROM.get(QUADTURNOUT_STATE_BASEADD+i,temp);
+#ifdef DBGLVL1
+      Serial.print("INIT: Turnout ");
+      Serial.print(i);
+      Serial.print(" Toggle ");
+      Serial.print(j);
+      Serial.print(" Initial State ");
+      Serial.println(temp);
+#endif
+      if (temp == 1) {
+        if ( i < 4 ) {
+#ifdef DBGLVL2
+          Serial.print("Turnout A pinMode ");
+          Serial.println(2*i);
+#endif
+          turnoutA.pinMode(2*i, OUTPUT, LOW);
+          turnoutA.pinMode(2*i+1, OUTPUT, HIGH);
+        }
+        else if ( i < 8 ) {
+#ifdef DBGLVL2
+          Serial.print("Turnout B pinMode ");
+          Serial.println(2*(i-4));
+#endif
+          turnoutB.pinMode(2*(i-4), OUTPUT, LOW);
+          turnoutB.pinMode(2*(i-4)+1, OUTPUT, HIGH);
+        }
+        else if ( i < 12 ) {
+          turnoutC.pinMode(2*(i-8), OUTPUT, LOW);
+          turnoutC.pinMode(2*(i-8)+1, OUTPUT, HIGH);
+        }
+        _state = 1;
+      }
+      else {
+        if ( i < 4 ) {
+          turnoutA.pinMode(2*i, OUTPUT, HIGH);
+          turnoutA.pinMode(2*i+1, OUTPUT, LOW);
+        }
+        else if ( i < 8 ) {
+          turnoutB.pinMode(2*(i-4), OUTPUT, HIGH);
+          turnoutB.pinMode(2*(i-4)+1, OUTPUT, LOW);
+        }
+        else if ( i < 12 ) {
+          turnoutC.pinMode(2*(i-8), OUTPUT, HIGH);
+          turnoutC.pinMode(2*(i-8)+1, OUTPUT, LOW);
+        }
+        _state = 0;
+      } 
+    }
+    void set(byte control_status) {
+      if ( control_status != 0 ) {
+        if (( _state == 0 ) && ( control_status == 1 )) {
+          turnout_throw();
+        }
+        else if (( _state == 1 ) && ( control_status == 2 )) {
+          turnout_close();
+        }
+      }
+    }
+    byte getControl() {
+      return _control_channel;
+    }
+  private:
+    void turnout_throw() {
+      _state = 1;
+      byte _chn = _channel - 1;
+      if ( _chn < 4 ) {
+        turnoutA.digitalWrite(2*_chn, LOW);
+        turnoutA.digitalWrite(2*_chn+1, HIGH);
+      }
+      else if ( _chn < 8 ) {
+        turnoutB.digitalWrite(2*(_chn-4), LOW);
+        turnoutB.digitalWrite(2*(_chn-4)+1, HIGH);
+      }
+      else if ( _chn < 12 ) {
+        turnoutC.digitalWrite(2*(_chn-8), LOW);
+        turnoutC.digitalWrite(2*(_chn-8)+1, HIGH);
+      }
+      EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
+#ifdef DBGLVL1
+      Serial.print("throw: channel ");
+      Serial.println(_channel);
+#endif
+    }
+
+    void turnout_close() {
+      _state = 0;
+      byte _chn = _channel - 1;
+      if ( _chn < 4 ) {
+        turnoutA.digitalWrite(2*_chn, HIGH);
+        turnoutA.digitalWrite(2*_chn+1, LOW);
+      }
+      else if ( _chn < 8 ) {
+        turnoutB.digitalWrite(2*(_chn-4), HIGH);
+        turnoutB.digitalWrite(2*(_chn-4)+1, LOW);
+      }
+      else if ( _chn < 12 ) {
+        turnoutC.digitalWrite(2*(_chn-8), HIGH);
+        turnoutC.digitalWrite(2*(_chn-8)+1, LOW);
+      }
+      EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
+#ifdef DBGLVL1
+      Serial.print("close: channel ");
+      Serial.println(_channel);
+#endif
+    }
+  
+    byte _state;
+    byte _channel;
+    byte _control_channel;
+};
+
+class CMRSturnouts {
+  public:
+    CMRSturnouts() {
+    }
+    ~CMRSturnouts() {
+    }
+    void init() {
+      byte temp;
+      int i;
+      EEPROM.get(18,temp);
+      _boards = int(temp);
+#ifdef DBGLVL1
+      Serial.print("INIT: Initializing ");
+      Serial.print(_boards);
+      Serial.println(" Turnout boards.");
+#endif
+      if ( _boards > 0 ) {
+        for ( i = 0 ; i < 4*_boards ; i++ ) {
+          turnout[i].init(i, EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i));
+        }
+      }
+    }
+    byte getControl(byte arg) {
+      turnout[arg].getControl();
+    }
+    void setControl(byte arg, byte val) {
+      turnout[arg].set(val);
+    }
+
+    void show() {
+      int i;
+      if ( _boards > 0 ) {
+        for ( i = 0 ; i < 4*_boards ; i++ ) {
+          Serial.print("show: i = ");
+          Serial.print(i);
+          byte temp;
+          temp = turnout[i].getControl();
+          Serial.print(" control ");
+          Serial.println(temp);                                                                                                                                                                        
+        }
+      }
+    }
+  private:
+    int _boards;
+    cmrs_turnout turnout[12];
+};
+
 ///
-/// Class instantianion
+/// Class instantation
 ///
-CMRStoggles TheToggles;
+CMRStoggles  TheToggles;
+CMRSturnouts TheTurnouts;
 
 
 
@@ -188,6 +369,8 @@ void setup() {
   scan_i2c();
 
   TheToggles.init();
+  TheTurnouts.init();
+  TheTurnouts.show();
 }
 
 ///
@@ -195,17 +378,50 @@ void setup() {
 ///
 
 void loop() {
-  // put your main code here, to run repeatedly:
   unsigned long currentTime = millis();
   if ( currentTime < prevTime )
     prevTime = currentTime; 
   if ( currentTime > ( prevTime + TIME_STEP ) ) {
     TheToggles.scan();
+    setTurnouts();
 
     prevTime += TIME_STEP;
   }
 }
 
+void setTurnouts() {
+  byte temp;
+  int i;
+  EEPROM.get(18,temp);
+  for ( i = 0 ; i < 4*temp ; i++ ) {
+    byte _control, _state;
+//    _control = TheTurnouts.getControl(i);
+    _control = EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i);
+#ifdef DBGLVL2
+    Serial.print(i);
+    Serial.print(" ");
+    Serial.println(_control);
+#endif
+    if ( _control > 0 ) {
+#ifdef DBGLVL2
+      Serial.print("Turnout ");
+      Serial.print(i);
+      Serial.print(" Control ");
+      Serial.println(_control);
+#endif
+      _state = TheToggles.getToggle(_control-1);
+      if ( _state != 0 ) {
+        TheTurnouts.setControl(i, _state);
+#ifdef DBGLVL2
+        Serial.print("Turnout ");
+        Serial.print(i);
+        Serial.print(" state ");
+        Serial.println(_state);
+#endif
+      }
+    }
+  } 
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
