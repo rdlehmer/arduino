@@ -1,4 +1,8 @@
-
+                                             // Version v0.5.1
+// Ron Lehmer   2023-11-19
+//
+// For the Arduino Uno R3/Mega 2560
+//
 ///
 /// Global defines
 ///
@@ -48,9 +52,13 @@
 
 PCF8574 toggle1(32);
 PCF8574 toggle2(33);
+
 MCP23017 turnoutA(36);
 MCP23017 turnoutB(37);
 MCP23017 turnoutC(38);
+
+PCF8574 indicator1(56);
+PCF8574 indicator2(57);
 
 String consoleBuffer;
 struct StringObject {
@@ -88,17 +96,6 @@ class cmrs_toggle {
     }
     void set(byte arg) {
       _state = arg;
-#if 0      
-      if ( arg = 1 ) {
-        _state = 1;
-      }
-      else if ( arg = 2 ) {
-        _state = 2;
-      }
-      else {
-        _state = 0;
-      }
-#endif
     }
     byte get() {
       return _state;
@@ -343,12 +340,98 @@ class CMRSturnouts {
     cmrs_turnout turnout[12];
 };
 
+
+class cmrs_indicator {
+  public:
+    cmrs_indicator() {
+      _state = 0;
+    }
+    ~cmrs_indicator() {
+    
+    }
+    void init (byte arg) {
+      _channel = arg;
+    }
+    void set(byte arg) {
+      _state = arg;
+      if ( _channel < 4 ) {
+        switch ( _state ) {
+          case 1 : indicator1.digitalWrite(2*_channel, LOW);
+                 indicator1.digitalWrite(2*_channel+1, HIGH);
+                 break;
+          case 2 : indicator1.digitalWrite(2*_channel, HIGH);
+                 indicator1.digitalWrite(2*_channel+1, LOW);
+                 break;
+          default : indicator1.digitalWrite(2*_channel, HIGH);
+                 indicator1.digitalWrite(2*_channel+1, HIGH);
+                 break; 
+        }
+      }
+      else {
+        switch ( _state ) {
+          case 1 : indicator2.digitalWrite(2*(_channel-4), LOW);
+                 indicator2.digitalWrite(2*(_channel-4)+1, HIGH);
+                 break;
+          case 2 : indicator2.digitalWrite(2*(_channel-4), HIGH);
+                 indicator2.digitalWrite(2*(_channel-4)+1, LOW);
+                 break;
+          default : indicator2.digitalWrite(2*(_channel-4), HIGH);
+                 indicator2.digitalWrite(2*(_channel-4)+1, HIGH);
+                 break; 
+        }      
+      }
+    }
+    
+    byte get() {
+      return _state;
+    }
+  private:
+    byte _state;
+    byte _channel;
+};
+
+class CMRSindicators {
+  public:
+    CMRSindicators() {
+    
+    }
+    ~CMRSindicators() {
+    
+    }
+    void init() {
+      byte temp;
+      int i;
+      EEPROM.get(19,temp);
+      _boards = int(temp);
+#ifdef DBGLVL1
+      Serial.print("INIT: Initializing ");
+      Serial.print(_boards);
+      Serial.println(" Indicator boards.");
+#endif
+      if ( _boards > 0 ) {
+        for ( i = 0; i < 8; i++ ) {
+          indicators[i].init(i);
+          indicator1.pinMode(i, OUTPUT, HIGH);
+          if ( _boards > 1 ) indicator2.pinMode(i, OUTPUT, HIGH);
+        }
+        indicator1.begin();
+        if ( _boards > 1 ) indicator2.begin();
+      }
+    }
+    void set(byte arg, byte val) {
+      indicators[arg].set(val);
+    }
+  private:
+    int _boards;
+    cmrs_indicator indicators[8];
+};
+
 ///
 /// Class instantation
 ///
-CMRStoggles  TheToggles;
-CMRSturnouts TheTurnouts;
-
+CMRStoggles    TheToggles;
+CMRSturnouts   TheTurnouts;
+CMRSindicators TheIndicators;
 
 
 ///
@@ -370,7 +453,8 @@ void setup() {
 
   TheToggles.init();
   TheTurnouts.init();
-  TheTurnouts.show();
+//  TheTurnouts.show();
+  TheIndicators.init();
 }
 
 ///
@@ -384,6 +468,7 @@ void loop() {
   if ( currentTime > ( prevTime + TIME_STEP ) ) {
     TheToggles.scan();
     setTurnouts();
+    setIndicators();
 
     prevTime += TIME_STEP;
   }
@@ -423,6 +508,31 @@ void setTurnouts() {
   } 
 }
 
+void setIndicators() {
+  int i;
+  byte _control[2];
+  byte _boards,temp;
+  EEPROM.get(19,_boards);
+  for ( i = 0; i < 4*_boards; i++ ) {
+    EEPROM.get(INDICATOR_BASEADD+2*i,_control);
+    if ( _control[0] != 0 ) {
+      EEPROM.get(QUADTURNOUT_STATE_BASEADD+_control[0]-1,temp);
+      TheIndicators.set(i,temp+1);
+#ifdef DBGLVL2
+      Serial.print("Indicator: set channel ");
+      Serial.print(i);
+      Serial.print(" val ");
+      Serial.println(temp+1);
+#endif
+    }
+    else if ( _control[1] != 0 ) {
+//    TBD - sensors
+    }
+    else {
+      TheIndicators.set(i,0);
+    }
+  }
+}
 ///////////////////////////////////////////////////////////////////////////////
 //
 // EEPROM Initialization
