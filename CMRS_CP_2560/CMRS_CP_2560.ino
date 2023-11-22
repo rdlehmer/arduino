@@ -1,5 +1,5 @@
                                              // Version v0.5.1
-// Ron Lehmer   2023-11-19
+// Ron Lehmer   2023-11-22
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -7,7 +7,7 @@
 /// Global defines
 ///
 
-#define DBGLVL1
+//#define DBGLVL1
 //#define DBGLVL2
 
 #define SD_SYSTEM
@@ -90,8 +90,9 @@ struct QuadSensorObject {
   byte sensorNumber;
 };
 
-static unsigned long updateTime = 0;
 static unsigned long prevTime = 0;
+static long counts = 0;
+static unsigned long tempTime = 0;
 static int run_first_time = 1;
 
 #ifdef NETWORK_SYSTEM
@@ -122,16 +123,21 @@ class cmrs_toggle {
     cmrs_toggle() {
      _state = 0;
     }
+    
     ~cmrs_toggle() {
     }
+    
     void set(byte arg) {
       _state = arg;
     }
+    
     byte get() {
       return _state;
     }
+    
   private:
     byte _state;
+    
 };
 
 ///
@@ -145,8 +151,10 @@ class CMRStoggles {
   public:
     CMRStoggles() {
     }
+    
     ~CMRStoggles() {
     }
+    
     void init() {
       byte temp;
       int i;
@@ -166,6 +174,7 @@ class CMRStoggles {
         if ( _boards > 1 ) toggle2.begin();
       }
     }
+    
     void scan() {
       int i;
       byte tempa,tempb;
@@ -186,25 +195,19 @@ class CMRStoggles {
         else {
           toggles[i].set(0);
         }
-#ifdef DBGLVL2
-        if ( prevtoggles[i].get() != toggles[i].get() ) {
-          Serial.print(i);
-          Serial.print(" ");
-          Serial.print(toggles[i].get());
-          Serial.print(" ");
-          Serial.println(prevtoggles[i].get());
-        }
-#endif
         prevtoggles[i].set(toggles[i].get());
       }
     }
+    
     int getToggle(int arg) {
       return toggles[arg].get();
     }
+    
   private:
     cmrs_toggle toggles[8];
     cmrs_toggle prevtoggles[8];
     int _boards;
+    
 };
 
 ///
@@ -221,8 +224,10 @@ class cmrs_turnout {
       _state = 0;
       _channel = 0;
     }
+    
     ~cmrs_turnout() {
     }
+    
     void init(byte i, byte j) {
       byte temp;
       _control_channel = j;
@@ -238,18 +243,10 @@ class cmrs_turnout {
 #endif
       if (temp == 1) {
         if ( i < 4 ) {
-#ifdef DBGLVL2
-          Serial.print("Turnout A pinMode ");
-          Serial.println(2*i);
-#endif
           turnoutA.pinMode(2*i, OUTPUT, LOW);
           turnoutA.pinMode(2*i+1, OUTPUT, HIGH);
         }
         else if ( i < 8 ) {
-#ifdef DBGLVL2
-          Serial.print("Turnout B pinMode ");
-          Serial.println(2*(i-4));
-#endif
           turnoutB.pinMode(2*(i-4), OUTPUT, LOW);
           turnoutB.pinMode(2*(i-4)+1, OUTPUT, HIGH);
         }
@@ -275,19 +272,15 @@ class cmrs_turnout {
         _state = 0;
       } 
     }
+    
     void set(byte control_status) {
       byte _stx = 0;
 #ifdef NETWORK_SYSTEM
-#if 0
-        if ( (( _state == 0 ) && ( control_status == 1 ))
-            || (( _state == 1 ) && ( control_status == 2 )) ) {
-        sendUpdate();
-      }
-#endif
       _stx = sethw(control_status);
       if ( _stx == 1 ) sendUpdate();
 #endif
     }
+    
     byte sethw(byte control_status) {
       byte ret_val = 0;
       if ( control_status != 0 ) {
@@ -302,19 +295,15 @@ class cmrs_turnout {
       }
       return ret_val;
     }
+    
     byte getControl() {
-#ifdef DBGLVL1
-      Serial.print("getControl: ");
-      Serial.println(_control_channel);
-#endif
       return _control_channel;
     }
     
  #ifdef NETWORK_SYSTEM   
     void sendUpdate() {
       char tempstr[7];
-//      if (( client.connected() ) && ( jmri_running == 1 )) {
-        if ( 1 ) {
+      if (( client.connected() ) && ( jmri_running == 1 )) {
         String tempStr;
         EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*(_channel-1)+1,tempstr);
         tempStr = String(tempstr);
@@ -354,7 +343,7 @@ class cmrs_turnout {
         turnoutC.digitalWrite(2*(_chn-8)+1, HIGH);
       }
       EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
-#ifdef DBGLVL1
+#ifdef DBGLVL2
       Serial.print("throw: channel ");
       Serial.println(_channel);
 #endif
@@ -376,7 +365,7 @@ class cmrs_turnout {
         turnoutC.digitalWrite(2*(_chn-8)+1, LOW);
       }
       EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
-#ifdef DBGLVL1
+#ifdef DBGLVL2
       Serial.print("close: channel ");
       Serial.println(_channel);
 #endif
@@ -395,8 +384,10 @@ class CMRSquadSensors {
   public:
     CMRSquadSensors() {
     }
+    
     ~CMRSquadSensors() {
     }
+    
     void init() {
       byte temp;
       int i;
@@ -415,6 +406,7 @@ class CMRSquadSensors {
         }
       }
     }
+    
     void scan() {
       QuadSensorObject quadSensorObj;
       int i;
@@ -438,17 +430,66 @@ class CMRSquadSensors {
           } else {
             quadSensor[i].set(0);
           }
+          if ( prevquadSensor[i].get() != quadSensor[i].get() )
+            sendUpdate(i);
           prevquadSensor[i].set(quadSensor[i].get());
         }
       }
     }
+    
     int getQuadSensor(int arg) {
       return quadSensor[arg].get();
     }
+ 
+ #ifdef NETWORK_SYSTEM
+    void sendUpdate(byte arg) {
+      char tempstr[7];
+      if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
+        String tempStr;
+        byte _bo;
+        byte _ch;
+        EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*arg,_bo);
+        EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*arg+1,_ch);
+        if (( _bo != 0 ) && ( _ch != 0 )) {
+          EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*arg+2,tempstr);
+          tempStr = String(tempstr);
+          if ( tempStr.length() != 0 ) {
+            tempStr = String("SENSOR "+tempStr);
+            if ( getQuadSensor(arg) == 0 ) {
+              tempStr = String(tempStr+" INACTIVE");
+            }
+            else if ( getQuadSensor(arg) == 1 ) {
+              tempStr = String(tempStr+" ACTIVE");
+            }
+            else {
+              tempStr = String(tempStr+" UNKNOWN");
+            }
+            Serial.print("Send: ");
+            Serial.println(tempStr);
+            if (client.connected()) client.println(tempStr);
+          }
+        }
+      }   
+    }
+    void sendQuadSensorsStatus(int arg) {
+      if ( ( arg >= 0 ) && ( arg < 16 ) ) {
+        sendUpdate(arg);
+      }
+    }
+#if 0    
+    void sendQuadSensorsStatus() {
+      byte i;
+      for ( i = 0 ; i < 16 ; i++ ) {
+        sendUpdate(i);
+      }
+    }
+#endif
+#endif   
   private:
     cmrs_toggle quadSensor[16];
     cmrs_toggle prevquadSensor[16];
     int _boards;
+    
 };
 
 
@@ -464,8 +505,10 @@ class CMRSturnouts {
   public:
     CMRSturnouts() {
     }
+    
     ~CMRSturnouts() {
     }
+    
     void init() {
       byte temp;
       int i;
@@ -482,23 +525,41 @@ class CMRSturnouts {
         }
       }
     }
+    
     byte getControl(byte arg) {
       return turnout[arg].getControl();
     }
+    
     void setControl(byte arg, byte val) {
       turnout[arg].set(val);
     }
+    
     void setRemote(byte arg, byte val) {
-#ifdef DBGLVL1
-      Serial.print("setRemote: arg ");
-      Serial.print(arg);
-      Serial.print(" val ");
-      Serial.println(val);
-#endif
       turnout[arg].sethw(val);
       setSlavedControl(arg, val);
     }
-#if 1
+    
+#ifdef NETWORK_SYSTEM
+    void sendTurnoutsStatus(int arg) {
+      if ( _boards > 0 ) {
+        if (( arg >= 0 ) && ( arg < 4*_boards )) {
+          turnout[arg].sendUpdate();
+        }
+      }
+    }
+#if 0
+    void sendTurnoutsStatus() {
+      int i;
+      if ( _boards > 0 ) {
+        for ( i = 0 ; i < 4*_boards ; i++ ) {
+          turnout[i].sendUpdate();
+        }
+      }
+    }
+#endif
+#endif
+
+#if 0
     void show() {
       int i;
       if ( _boards > 0 ) {
@@ -513,6 +574,7 @@ class CMRSturnouts {
       }
     }
 #endif
+
   private:
     void setSlavedControl(byte arg, byte val) {
       int i;
@@ -522,22 +584,14 @@ class CMRSturnouts {
       for ( i = 0 ; i < 4*_boards ; i++ ) {
         temp = getControl(i);
         if (( i != arg ) && ( master == temp )) {
-#ifdef DBGLVL1
-                Serial.print("setSlaved: arg ");
-                Serial.print(arg);
-                Serial.print(" mast ");
-                Serial.print(master);
-                Serial.print(" temp ");
-                Serial.print(temp);
-                Serial.print(" val ");
-                Serial.println(val);
-#endif
-                setControl(i, val);
+          setControl(i, val);
         }
       }
     }
+    
     int _boards;
     cmrs_turnout turnout[12];
+    
 };
 
 ///
@@ -552,12 +606,14 @@ class cmrs_indicator {
     cmrs_indicator() {
       _state = 0;
     }
-    ~cmrs_indicator() {
     
+    ~cmrs_indicator() {    
     }
+    
     void init (byte arg) {
       _channel = arg;
     }
+    
     void set(byte arg) {
       _state = arg;
       if ( _channel < 4 ) {
@@ -591,9 +647,11 @@ class cmrs_indicator {
     byte get() {
       return _state;
     }
+    
   private:
     byte _state;
     byte _channel;
+    
 };
 
 ///
@@ -604,12 +662,12 @@ class cmrs_indicator {
 
 class CMRSindicators {
   public:
-    CMRSindicators() {
-    
+    CMRSindicators() {    
     }
-    ~CMRSindicators() {
     
+    ~CMRSindicators() {  
     }
+    
     void init() {
       byte temp;
       int i;
@@ -630,12 +688,15 @@ class CMRSindicators {
         if ( _boards > 1 ) indicator2.begin();
       }
     }
+    
     void set(byte arg, byte val) {
       indicators[arg].set(val);
     }
+    
   private:
     int _boards;
     cmrs_indicator indicators[8];
+    
 };
 
 ///
@@ -668,7 +729,7 @@ void setup() {
   TheToggles.init();
   TheTurnouts.init();
   TheQuadSensors.init();
-  TheTurnouts.show();
+//  TheTurnouts.show();
   TheIndicators.init();
 }
 
@@ -680,16 +741,16 @@ void loop() {
   unsigned long currentTime = millis();
   if ( currentTime < prevTime )
     prevTime = currentTime; 
-  if ( currentTime < updateTime )
-    updateTime = currentTime;
-    
+  if ( currentTime < tempTime )
+    tempTime = currentTime;
+
+
 #ifdef NETWORK_SYSTEM
   if (( run_first_time == 1 ) && ( reconnect_timer == 0 )) {
     connectServer();
     run_first_time = 0;
     reconnect_timer = 60000;
   }
-
   if (client.available()) {
     char c = client.read();
     if ( c != 10 )
@@ -711,8 +772,7 @@ void loop() {
     run_first_time = 2;  //waiting for timer
     jmri_running = 0;
     reconnect_timer = 60000;
-  }
-  
+  }  
 #endif
   
   if ( currentTime > ( prevTime + TIME_STEP ) ) {
@@ -734,10 +794,12 @@ void loop() {
     
     prevTime += TIME_STEP;
   }
-  
-  if ( currentTime > ( updateTime + UPDATE_TIME ) ) {
-  
-    updateTime += UPDATE_TIME;
+
+  if ( currentTime > ( tempTime + 1000 )) {
+    tempTime += 1000;
+    counts++;
+    TheTurnouts.sendTurnoutsStatus((counts+40) % 60);
+    TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
   }
 }
 
@@ -758,11 +820,7 @@ void setTurnouts() {
     byte _control, _state;
 //    _control = TheTurnouts.getControl(i);
     _control = EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i);
-#ifdef DBGLVL2
-    Serial.print(i);
-    Serial.print(" ");
-    Serial.println(_control);
-#endif
+
     if ( _control > 0 ) {
 #ifdef DBGLVL2
       Serial.print("Turnout ");
@@ -818,6 +876,12 @@ void setIndicators() {
     }
   }
 }
+
+//////////////////////////////////////////////////////////////////////
+//
+//  NETWORK SYSTEM
+//
+//////////////////////////////////////////////////////////////////////
 
 #ifdef NETWORK_SYSTEM
 
@@ -879,27 +943,19 @@ void processCommandBuffer() {
   cmdLabel = commandBuffer.substring(index1+1, index2);
   command = commandBuffer.substring(index2+1);
   if ( commandBuffer.startsWith("TURNOUT") ) {
-    Serial.println("CommandBuffer: Starts TURNOUT.");
-    Serial.println(commandBuffer);
-    Serial.println(cmdLabel);
-    Serial.println(command);
     for ( i = 0 ; i < 4*temp ; i ++ ) {
       EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i+1,tempstr);
       tempStr = String(tempstr);
       tempStr.trim();
-#ifdef DBGLVL2
-      Serial.print(tempStr);
-      Serial.println(cmdLabel.compareTo(tempStr));
-#endif
       if ( tempStr == cmdLabel ) {
         if ( command.startsWith("CLOSED") ) {
-#ifdef DBGLVL1
+#ifdef DBGLVL2
           Serial.print("CommandBuffer: setRemote CLOSED ");
           Serial.println(i);
 #endif
           TheTurnouts.setRemote(i,2);
         } else if ( command.startsWith("THROWN") ) {
-#ifdef DBGLVL1
+#ifdef DBGLVL2
           Serial.print("CommandBuffer: setRemote THROWN ");
           Serial.println(i);
 #endif
@@ -934,6 +990,9 @@ void processCommandBuffer() {
 #endif  
   } else if ( commandBuffer.startsWith("NODE jmri") ) {
     jmri_running = 1;
+#ifdef DBGLVL1
+    Serial.println("Connection to JMRI successful.");
+#endif
   }
 }
 
@@ -948,32 +1007,44 @@ void processCommandBuffer() {
 ///////////////////////////////////////////////////////////////////////////////
 
 void eeprom_init() {
-  int i,j;
+  int i;
   byte temp;
-  for ( i = 0 ; i < 8 ; i++ ) {
-    EEPROM.get(TURNOUT_BASEADD+i*SIZE_OF_TURNOUT,temp);
+  
+  for ( i = 0 ; i < 8*SIZE_OF_TURNOUT ; i++ ) {
+    EEPROM.get(TURNOUT_BASEADD+i,temp);
     if ( temp == 255 ) {
-      for ( j = 0 ; j < SIZE_OF_TURNOUT ; j++ ) {
-        EEPROM.update(TURNOUT_BASEADD+i*SIZE_OF_TURNOUT+j,byte(0));
-      }
+        EEPROM.update(TURNOUT_BASEADD+i,byte(0));
     }
   }
-  for ( i = 0 ; i < 16; i++ ) {
-    EEPROM.get(SENSOR_BASEADD+i*SIZE_OF_SENSOR,temp);
+  
+  for ( i = 0 ; i < 16*SIZE_OF_TURNOUT ; i++ ) {
+    EEPROM.get(QUADTURNOUT_BASEADD+i,temp);
     if ( temp == 255 ) {
-      for ( j = 0 ; j < SIZE_OF_SENSOR ; j++ ) {
-        EEPROM.update(SENSOR_BASEADD+i*SIZE_OF_SENSOR+j,byte(0));
-      }
+      EEPROM.update(QUADTURNOUT_BASEADD+i,byte(0));
     }
   }
-  for ( i = 0 ; i < 16; i++ ) {
-    EEPROM.get(SIGNAL_BASEADD+i*SIZE_OF_SIGNAL,temp);
+  
+  for ( i = 0 ; i < 16*SIZE_OF_QUADTURNOUT_SENSOR ; i++ ) {
+    EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+i,temp);
     if ( temp == 255 ) {
-      for ( j = 0 ; j < SIZE_OF_SIGNAL ; j++ ) {
-        EEPROM.update(SIGNAL_BASEADD+i*SIZE_OF_SIGNAL+j,byte(0));
-      }
+      EEPROM.update(QUADTURNOUT_SENSOR_BASEADD+i,byte(0));
     }
   }
+  
+  for ( i = 0 ; i < 16*SIZE_OF_SENSOR ; i++ ) {
+    EEPROM.get(SENSOR_BASEADD+i,temp);
+    if ( temp == 255 ) {
+      EEPROM.update(SENSOR_BASEADD+i,byte(0));
+    }
+  }
+  
+  for ( i = 0 ; i < 16*SIZE_OF_SIGNAL ; i++ ) {
+    EEPROM.get(SIGNAL_BASEADD+i,temp);
+    if ( temp == 255 ) {
+      EEPROM.update(SIGNAL_BASEADD+i,byte(0));
+    }
+  }
+  
   for ( i = 0 ; i < 16; i++ ) {
     EEPROM.get(INDICATOR_BASEADD+i,temp);
     if ( temp == 255 ) {
