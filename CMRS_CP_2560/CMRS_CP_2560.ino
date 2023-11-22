@@ -11,6 +11,10 @@
 //#define DBGLVL2
 
 #define SD_SYSTEM
+#define NETWORK_SYSTEM
+
+
+//#define PCF8574_LOW_MEMORY
 
 #define ADDRESS_NUMBER_TOGGLE_BOARDS 16
 #define ADDRESS_NUMBER_QUADTURNOUT_BOARDS 18
@@ -36,6 +40,7 @@
 #define SIZE_OF_INDICATOR 2
 
 #define TIME_STEP 50
+#define UPDATE_TIME 60000
 ///
 /// Global Includes
 ///
@@ -85,8 +90,19 @@ struct QuadSensorObject {
   byte sensorNumber;
 };
 
+static unsigned long updateTime = 0;
 static unsigned long prevTime = 0;
+static int run_first_time = 1;
 
+#ifdef NETWORK_SYSTEM
+
+static long reconnect_timer = 0;
+EthernetClient client;
+static byte jmri_running = 0;
+String commandBuffer;
+String receiveBuffer;
+
+#endif
 ///
 /// Classes
 ///
@@ -260,18 +276,67 @@ class cmrs_turnout {
       } 
     }
     void set(byte control_status) {
+      byte _stx = 0;
+#ifdef NETWORK_SYSTEM
+#if 0
+        if ( (( _state == 0 ) && ( control_status == 1 ))
+            || (( _state == 1 ) && ( control_status == 2 )) ) {
+        sendUpdate();
+      }
+#endif
+      _stx = sethw(control_status);
+      if ( _stx == 1 ) sendUpdate();
+#endif
+    }
+    byte sethw(byte control_status) {
+      byte ret_val = 0;
       if ( control_status != 0 ) {
         if (( _state == 0 ) && ( control_status == 1 )) {
           turnout_throw();
+          ret_val = 1;
         }
         else if (( _state == 1 ) && ( control_status == 2 )) {
           turnout_close();
+          ret_val = 1;
+        }
+      }
+      return ret_val;
+    }
+    byte getControl() {
+#ifdef DBGLVL1
+      Serial.print("getControl: ");
+      Serial.println(_control_channel);
+#endif
+      return _control_channel;
+    }
+    
+ #ifdef NETWORK_SYSTEM   
+    void sendUpdate() {
+      char tempstr[7];
+//      if (( client.connected() ) && ( jmri_running == 1 )) {
+        if ( 1 ) {
+        String tempStr;
+        EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*(_channel-1)+1,tempstr);
+        tempStr = String(tempstr);
+        if ( tempStr.length() != 0 ) {
+          tempStr = String("TURNOUT "+String(tempstr));
+          if ( _state == 0 ) {
+            tempStr = String(tempStr+" CLOSED");
+          }
+          else if ( _state == 1 ) {
+            tempStr = String(tempStr+" THROWN");       
+          }
+          else {
+            tempStr = String(tempStr+" UNKNOWN");       
+          }
+          Serial.print("Send: ");
+          Serial.println(tempStr);
+          if (client.connected()) client.println(tempStr);
         }
       }
     }
-    byte getControl() {
-      return _control_channel;
-    }
+#endif
+
   private:
     void turnout_throw() {
       _state = 1;
@@ -418,12 +483,22 @@ class CMRSturnouts {
       }
     }
     byte getControl(byte arg) {
-      turnout[arg].getControl();
+      return turnout[arg].getControl();
     }
     void setControl(byte arg, byte val) {
       turnout[arg].set(val);
     }
-#if 0
+    void setRemote(byte arg, byte val) {
+#ifdef DBGLVL1
+      Serial.print("setRemote: arg ");
+      Serial.print(arg);
+      Serial.print(" val ");
+      Serial.println(val);
+#endif
+      turnout[arg].sethw(val);
+      setSlavedControl(arg, val);
+    }
+#if 1
     void show() {
       int i;
       if ( _boards > 0 ) {
@@ -439,6 +514,28 @@ class CMRSturnouts {
     }
 #endif
   private:
+    void setSlavedControl(byte arg, byte val) {
+      int i;
+      byte master;
+      byte temp;
+      master = getControl(arg);
+      for ( i = 0 ; i < 4*_boards ; i++ ) {
+        temp = getControl(i);
+        if (( i != arg ) && ( master == temp )) {
+#ifdef DBGLVL1
+                Serial.print("setSlaved: arg ");
+                Serial.print(arg);
+                Serial.print(" mast ");
+                Serial.print(master);
+                Serial.print(" temp ");
+                Serial.print(temp);
+                Serial.print(" val ");
+                Serial.println(val);
+#endif
+                setControl(i, val);
+        }
+      }
+    }
     int _boards;
     cmrs_turnout turnout[12];
 };
@@ -571,7 +668,7 @@ void setup() {
   TheToggles.init();
   TheTurnouts.init();
   TheQuadSensors.init();
-//  TheTurnouts.show();
+  TheTurnouts.show();
   TheIndicators.init();
 }
 
@@ -583,13 +680,64 @@ void loop() {
   unsigned long currentTime = millis();
   if ( currentTime < prevTime )
     prevTime = currentTime; 
+  if ( currentTime < updateTime )
+    updateTime = currentTime;
+    
+#ifdef NETWORK_SYSTEM
+  if (( run_first_time == 1 ) && ( reconnect_timer == 0 )) {
+    connectServer();
+    run_first_time = 0;
+    reconnect_timer = 60000;
+  }
+
+  if (client.available()) {
+    char c = client.read();
+    if ( c != 10 )
+      receiveBuffer = String(receiveBuffer+String(c));
+    if ( c == 10 ) {
+      Serial.print("Receive: ");
+      Serial.println(receiveBuffer);
+      commandBuffer = receiveBuffer;
+      receiveBuffer = String();
+      processCommandBuffer();  // This is where we process incoming messages
+    }
+  }
+    // if the server's disconnected, stop the client:
+  if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
+    Serial.println();
+    Serial.println("disconnecting.");
+    client.stop();
+    // do nothing:
+    run_first_time = 2;  //waiting for timer
+    jmri_running = 0;
+    reconnect_timer = 60000;
+  }
+  
+#endif
+  
   if ( currentTime > ( prevTime + TIME_STEP ) ) {
+  
+#ifdef NETWORK_SYSTEM  
+    if ( ( reconnect_timer > 0 ) && ( run_first_time == 2 ) ) {
+      reconnect_timer = reconnect_timer - TIME_STEP;
+    }
+    if ( reconnect_timer <= 0 ) {
+      reconnect_timer = 0;
+      run_first_time = 1;
+    }
+#endif
+
     TheToggles.scan();
     setTurnouts();
     setIndicators();
     TheQuadSensors.scan();
     
     prevTime += TIME_STEP;
+  }
+  
+  if ( currentTime > ( updateTime + UPDATE_TIME ) ) {
+  
+    updateTime += UPDATE_TIME;
   }
 }
 
@@ -670,6 +818,128 @@ void setIndicators() {
     }
   }
 }
+
+#ifdef NETWORK_SYSTEM
+
+byte connectServer() {
+  byte ret_val;
+  byte mac[6];
+  byte ipAddr[4];   
+  byte serveripAddr[4];
+
+  static byte Efirst = 1;
+
+  EEPROM.get(0, mac);
+  EEPROM.get(8, ipAddr);
+  EEPROM.get(12, serveripAddr);
+
+  IPAddress ip(ipAddr);
+  IPAddress server(serveripAddr);
+
+  Ethernet.begin(mac, ip);
+
+  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+    Serial.println("Ethernet Hardware Error");
+#if 0
+    while (true) {
+      delay(1); // do nothing, no point running without Ethernet hardware
+    }
+#endif
+  }
+  while (Ethernet.linkStatus() == LinkOFF) {
+    Serial.println("Ethernet cable is not connected.");
+    delay(500);
+  }
+
+  // give the Ethernet shield a second to initialize:
+  if ( Efirst == 1 ) {
+//    delay(1000);
+    Efirst = 0;
+  }
+  Serial.println("connecting...");
+
+  // if you get a connection, report back via serial:
+  if (ret_val = client.connect(server, 2048)) {
+    Serial.println("connected");
+  } else {
+    // if you didn't get a connection to the server:
+    Serial.println("connection failed");
+  }
+}
+
+void processCommandBuffer() {
+  int index1,index2;
+  int i;
+  char tempstr[7];
+  byte temp;
+  EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
+  String cmdLabel,command,tempStr;
+  index1 = commandBuffer.indexOf(" ");
+  index2 = commandBuffer.indexOf(" ",index1+1);
+  cmdLabel = commandBuffer.substring(index1+1, index2);
+  command = commandBuffer.substring(index2+1);
+  if ( commandBuffer.startsWith("TURNOUT") ) {
+    Serial.println("CommandBuffer: Starts TURNOUT.");
+    Serial.println(commandBuffer);
+    Serial.println(cmdLabel);
+    Serial.println(command);
+    for ( i = 0 ; i < 4*temp ; i ++ ) {
+      EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i+1,tempstr);
+      tempStr = String(tempstr);
+      tempStr.trim();
+#ifdef DBGLVL2
+      Serial.print(tempStr);
+      Serial.println(cmdLabel.compareTo(tempStr));
+#endif
+      if ( tempStr == cmdLabel ) {
+        if ( command.startsWith("CLOSED") ) {
+#ifdef DBGLVL1
+          Serial.print("CommandBuffer: setRemote CLOSED ");
+          Serial.println(i);
+#endif
+          TheTurnouts.setRemote(i,2);
+        } else if ( command.startsWith("THROWN") ) {
+#ifdef DBGLVL1
+          Serial.print("CommandBuffer: setRemote THROWN ");
+          Serial.println(i);
+#endif
+          TheTurnouts.setRemote(i,1);
+        }          
+      }
+    }
+  } else if ( commandBuffer.startsWith("SENSOR") ) {
+#ifdef SIGNAL_SYSTEM
+    for ( i = 0 ; i < N_SIGNALS ; i++ ) {
+      EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+17,tempstr);
+      tempStr = String(tempstr);
+      if ( tempStr == cmdLabel ) {
+        if ( command.startsWith("ACTIVE") ) {
+          stateRemoteSensor[i] = 1;
+        } else if ( command.startsWith("INACTIVE") ) {
+          stateRemoteSensor[i] = 0;
+        }
+      }
+    }
+#endif
+  } else if ( commandBuffer.startsWith("SIGNALHEAD") ) {
+#ifdef SIGNAL_SYSTEM
+    for ( i = 0 ; i < N_SIGNALS ; i++ ) {
+      EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+10,tempstr);
+      tempStr = String(tempstr);
+      if ( tempStr == cmdLabel ) {
+        stateLeadingSignal[i] = signalAspectToCode(command);
+//        Serial.println(stateLeadingSignal[i]);       
+      }
+    }  
+#endif  
+  } else if ( commandBuffer.startsWith("NODE jmri") ) {
+    jmri_running = 1;
+  }
+}
+
+
+#endif
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //
