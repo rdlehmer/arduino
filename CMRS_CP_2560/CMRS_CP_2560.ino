@@ -3,6 +3,10 @@
 //
 // For the Arduino Uno R3/Mega 2560
 //
+// Prerequisties
+//
+//  PCF8574 Library - version 2.3.6 minimum
+//  MCP23017 Library - version 2.0.0 minimum
 ///
 /// Global defines
 ///
