@@ -1,4 +1,4 @@
-                                             // Version v0.5.1
+                                             // Version v0.5.2
 // Ron Lehmer   2023-11-22
 //
 // For the Arduino Uno R3/Mega 2560
@@ -581,10 +581,12 @@ class CMRSturnouts {
       byte master;
       byte temp;
       master = getControl(arg);
-      for ( i = 0 ; i < 4*_boards ; i++ ) {
-        temp = getControl(i);
-        if (( i != arg ) && ( master == temp )) {
-          setControl(i, val);
+      if ( master != 0 ) {
+        for ( i = 0 ; i < 4*_boards ; i++ ) {
+          temp = getControl(i);
+          if (( i != arg ) && ( master == temp )) {
+            setControl(i, val);
+          }
         }
       }
     }
@@ -716,6 +718,7 @@ CMRSquadSensors TheQuadSensors;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
+  Serial.println("CMRS CP_2560 v0.5.2");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
