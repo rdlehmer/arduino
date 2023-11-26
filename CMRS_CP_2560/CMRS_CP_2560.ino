@@ -1,8 +1,12 @@
-                                             // Version v0.5.2
+                                             // Version v0.6.0a
 // Ron Lehmer   2023-11-22
 //
 // For the Arduino Uno R3/Mega 2560
 //
+// Prerequisties
+//
+//  PCF8574 Library - version 2.3.6 minimum
+//  MCP23017 Library - version 2.0.0 minimum
 ///
 /// Global defines
 ///
@@ -12,7 +16,7 @@
 
 #define SD_SYSTEM
 #define NETWORK_SYSTEM
-
+#define POWER_SYSTEM
 
 //#define PCF8574_LOW_MEMORY
 
@@ -38,6 +42,10 @@
 
 #define INDICATOR_BASEADD 928
 #define SIZE_OF_INDICATOR 2
+
+#define TRACKPOWER_BASEADD 960
+
+#define TRACKMAP_BASEADD 1024
 
 #define TIME_STEP 50
 #define UPDATE_TIME 60000
@@ -66,6 +74,10 @@ MCP23017 turnoutA(36);
 MCP23017 turnoutB(37);
 MCP23017 turnoutC(38);
 
+#ifdef POWER_SYSTEM
+MCP23017 power(39);
+#endif
+
 PCF8574 indicator1(56);
 PCF8574 indicator2(57);
 
@@ -90,6 +102,10 @@ struct QuadSensorObject {
   byte sensorNumber;
 };
 
+struct TrackMapObject {
+  byte turnout[16];
+};
+
 static unsigned long prevTime = 0;
 static long counts = 0;
 static unsigned long tempTime = 0;
@@ -104,6 +120,14 @@ String commandBuffer;
 String receiveBuffer;
 
 #endif
+
+#ifdef POWER_SYSTEM
+
+String serial1ReceiveBuffer;
+String serial2ReceiveBuffer;
+
+#endif
+
 ///
 /// Classes
 ///
@@ -701,6 +725,74 @@ class CMRSindicators {
     
 };
 
+#ifdef POWER_SYSTEM
+///
+/// Power System
+///
+
+class CMRSpower {
+  public:
+    CMRSpower() {
+    
+    }
+    
+    ~CMRSpower() {
+    
+    }
+    
+    void init() {
+      int track, pin;
+      byte temp;
+      for ( track = 1 ; track < 17 ; track++ ) {
+        EEPROM.get(TRACKPOWER_BASEADD+(track-1), temp);
+        power_status[track-1].set(temp);
+        if ( (track % 2) == 0 ) {
+          pin = 7 + track/2;
+        }
+        else {
+          pin = track/2;
+        }
+        if ( temp == 1 ) {
+          power.pinMode(pin, OUTPUT, LOW );
+#ifdef DBGLVL2
+          Serial.print("CMRSpower init(): ");
+          Serial.print(pin);
+          Serial.print(temp);
+          Serial.println(" LOW");
+#endif
+        }
+        else {
+//          power.pinMode(i, OUTPUT, HIGH );
+            power.pinMode(pin, INPUT_PULLUP );
+#ifdef DBGLVL2
+          Serial.print("CMRSpower init(): ");
+          Serial.print(pin);
+          Serial.print(temp);
+          Serial.println(" HIGH");
+#endif        
+        }
+      }
+    }
+    
+    void set(byte arg, byte val) {
+      if ( val == 1 ) {
+        power.digitalWrite(arg-1, LOW);
+        EEPROM.update(TRACKPOWER_BASEADD+(arg-1), byte(1));
+        power_status[arg-1].set(1);
+      }
+      else {
+        power.digitalWrite(arg-1, HIGH);
+        EEPROM.update(TRACKPOWER_BASEADD+(arg-1), byte(0));
+        power_status[arg-1].set(0);
+      }
+    }
+    
+  private:
+    cmrs_toggle power_status[16];
+};
+
+#endif
+
 ///
 /// Class instantation
 ///
@@ -709,7 +801,9 @@ CMRStoggles     TheToggles;
 CMRSturnouts    TheTurnouts;
 CMRSindicators  TheIndicators;
 CMRSquadSensors TheQuadSensors;
-
+#ifdef POWER_SYSTEM
+CMRSpower		ThePowerSystem;
+#endif
 
 ///
 ///  BEGIN SETUP
@@ -718,7 +812,7 @@ CMRSquadSensors TheQuadSensors;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.5.2");
+  Serial.println("CMRS CP_2560 v0.6.0a");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -734,6 +828,11 @@ void setup() {
   TheQuadSensors.init();
 //  TheTurnouts.show();
   TheIndicators.init();
+#ifdef POWER_SYSTEM
+  ThePowerSystem.init();
+  Serial1.begin(9600);
+  Serial2.begin(9600);
+#endif
 }
 
 ///
@@ -766,6 +865,32 @@ void loop() {
       processCommandBuffer();  // This is where we process incoming messages
     }
   }
+#ifdef POWER_SYSTEM
+  if (Serial1.available()) {
+    int c = Serial1.read();
+    if ( c != 10 )
+      serial1ReceiveBuffer = String(serial1ReceiveBuffer+String(c));
+    if ( c == 10 ) {
+      Serial.print("Serial1 Receive: ");
+      Serial.println(serial1ReceiveBuffer);
+      commandBuffer = serial1ReceiveBuffer;
+      serial1ReceiveBuffer = String();
+      processCommandBuffer();  // This is where we process incoming messages
+    }
+  }
+  if (Serial2.available()) {
+    int c = Serial2.read();
+    if ( c != 10 )
+      serial2ReceiveBuffer = String(serial2ReceiveBuffer+String(c));
+    if ( c == 10 ) {
+      Serial.print("Serial2 Receive: ");
+      Serial.println(serial2ReceiveBuffer);
+      commandBuffer = serial2ReceiveBuffer;
+      serial2ReceiveBuffer = String();
+      processCommandBuffer();  // This is where we process incoming messages
+    }
+  }
+#endif
     // if the server's disconnected, stop the client:
   if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
     Serial.println();
@@ -997,6 +1122,11 @@ void processCommandBuffer() {
     Serial.println("Connection to JMRI successful.");
 #endif
   }
+#ifdef POWER_SYSTEM
+  else if ( commandBuffer.startsWith("KEYPAD") ) {
+  
+  }
+#endif
 }
 
 
@@ -1054,6 +1184,21 @@ void eeprom_init() {
       EEPROM.update(INDICATOR_BASEADD+i,byte(0));
     }
   }
+
+  for ( i = 0 ; i < 16; i++ ) {
+    EEPROM.get(TRACKPOWER_BASEADD+i,temp);
+    if ( temp == 255 ) {
+      EEPROM.update(TRACKPOWER_BASEADD+i,byte(0));
+    }
+  }
+
+  for ( i = 0 ; i < 256; i++ ) {
+    EEPROM.get(TRACKMAP_BASEADD+i,temp);
+    if ( temp == 255 ) {
+      EEPROM.update(TRACKMAP_BASEADD+i,byte(0));
+    }
+  }
+ 
 }
 
 
@@ -1226,6 +1371,7 @@ void show_configuration() {
 //  019         Number of Indicator Boards
 //  020         Number of Signal Boards
 //  021         Number of Dual Turnout Proto Boards starting with add 56
+//  022         Number of Relay Boards (max 1) add 39
   Serial.print("# Toggles ");
   EEPROM.get(16,contents);
   Serial.print(contents);
@@ -1244,7 +1390,10 @@ void show_configuration() {
   Serial.print(" # Dual ");
   EEPROM.get(21,contents);
   Serial.println(contents);
-//  022   039   undefined
+  Serial.print(" # Relay ");
+  EEPROM.get(22,contents);
+  Serial.println(contents);
+//  023   039   undefined
 //  040   055   Turnout Positions 0 - 15 (Quads)
 //  056   063   Turnout Positions 0 - 7 (Duals)
 //  064   071   Turnout Quad 1/1 [ 0 - toggle number (0 is off) ; [1-7] Name ]
@@ -1429,7 +1578,10 @@ void show_configuration() {
       Serial.print(" - sensor ");
       Serial.println(val2);
   }
-// 
+//  944   959   RESERVED
+//  960   975   Track Power Saved State
+//  976   1023  RESERVED
+//
 }
 
 
@@ -1616,7 +1768,8 @@ void scan_i2c() {
 //  019         Number of Indicator Boards
 //  020         Number of Signal Boards
 //  021         Number of Dual Turnout Proto Boards starting with add 56
-//  022   039   undefined
+//  022         Number of Relay Boards (max 1) add 39
+//  023   039   undefined
 //  040   055   Turnout Positions 0 - 15 (Quads)
 //  056   063   Turnout Positions 0 - 7 (Duals)
 //  064   071   Turnout Quad 1/1 [ 0 - toggle number (0 is off) ; [1-7] Name ]
@@ -1700,4 +1853,6 @@ void scan_i2c() {
 //  938   939   Indicator 2/2
 //  940   941   Indicator 2/3
 //  942   943   Indicator 2/4
-// 
+//  944   959   RESERVED
+//  960   975   Track Power Saved State
+//  976   1023  RESERVED
