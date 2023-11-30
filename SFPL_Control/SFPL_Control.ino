@@ -163,7 +163,8 @@ void initPins() {
   pinMode(9, INPUT_PULLUP);
   pinMode(10, INPUT_PULLUP);
   pinMode(11, INPUT_PULLUP);
-  pinMode(12, INPUT);
+  pinMode(12, OUTPUT);
+  digitalWrite(12, LOW);
   pinMode(13, INPUT);
   
 }
