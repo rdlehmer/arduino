@@ -762,8 +762,7 @@ class CMRSpower {
 #endif
         }
         else {
-//          power.pinMode(i, OUTPUT, HIGH );
-            power.pinMode(pin, INPUT_PULLUP );
+          power.pinMode(pin, INPUT_PULLUP );
 #ifdef DBGLVL2
           Serial.print("CMRSpower init(): ");
           Serial.print(pin);
@@ -775,13 +774,20 @@ class CMRSpower {
     }
     
     void set(byte arg, byte val) {
+      int pin;  
+      if ( (arg % 2) == 0 ) {
+        pin = 7 + arg/2;
+      }
+      else {
+        pin = arg/2;
+      }
       if ( val == 1 ) {
-        power.digitalWrite(arg-1, LOW);
+        power.pinMode(pin, OUTPUT, LOW );
         EEPROM.update(TRACKPOWER_BASEADD+(arg-1), byte(1));
         power_status[arg-1].set(1);
       }
       else {
-        power.digitalWrite(arg-1, HIGH);
+        power.pinMode(pin, INPUT_PULLUP );
         EEPROM.update(TRACKPOWER_BASEADD+(arg-1), byte(0));
         power_status[arg-1].set(0);
       }
@@ -1005,6 +1011,32 @@ void setIndicators() {
   }
 }
 
+
+#ifdef POWER_SYSTEM
+
+//
+// set_yard_turnouts
+// Read in the 16 turnout settings to get into a support yeard track.
+//  If value is set to 0, then send a 2 - close to the turnout
+//  If value is set to 1, then send a 1 - throw the turnout
+//  track = 0 means line all lead switches for the mainline
+//
+
+void set_yard_turnouts(byte track) {
+  TrackMapObject _track_map;
+  byte i;
+  if ( track < 16 ) {
+    EEPROM.get(TRACKMAP_BASEADD+track*16, _track_map);
+    byte temp1;
+    for ( i = 0 ; i < 12 ; i++ ) {   // only support 12 turnouts currently
+      temp1 = 2 - _track_map.turnout[i];
+      TheTurnouts.setControl(i,temp1); 
+    }
+  }
+}
+
+#endif
+
 //////////////////////////////////////////////////////////////////////
 //
 //  NETWORK SYSTEM
@@ -1065,7 +1097,8 @@ void processCommandBuffer() {
   char tempstr[7];
   byte temp;
   EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
-  String cmdLabel,command,tempStr;
+  String cmdLabel, command, tempStr;
+  
   index1 = commandBuffer.indexOf(" ");
   index2 = commandBuffer.indexOf(" ",index1+1);
   cmdLabel = commandBuffer.substring(index1+1, index2);
@@ -1118,13 +1151,19 @@ void processCommandBuffer() {
 #endif  
   } else if ( commandBuffer.startsWith("NODE jmri") ) {
     jmri_running = 1;
-#ifdef DBGLVL1
     Serial.println("Connection to JMRI successful.");
-#endif
   }
 #ifdef POWER_SYSTEM
-  else if ( commandBuffer.startsWith("KEYPAD") ) {
-  
+  else if ( commandBuffer.startsWith("KBPOWER") ) {    // KBPOWER nn ON/OFF via Serial
+    byte track1 = byte(cmdLabel.toInt());
+    if ( command.startsWith("ON") ) {
+      ThePowerSystem.set(track1,1);
+    } else if ( command.startsWith("OFF") ) {
+      ThePowerSystem.set(track1,0);
+    }
+  } else if ( commandBuffer.startsWith("KBTRACK") ) {  // KBTRACK nn SELECT via Serial
+    byte track1 = byte(cmdLabel.toInt());
+    set_yard_turnouts(track1);
   }
 #endif
 }
@@ -1220,7 +1259,7 @@ void writeSDCard() {
     filename = consoleBuffer.substring(index1+1);
     myFile = SD.open(filename.c_str(), FILE_WRITE);
     if ( myFile ) { 
-      for ( i = 0; i < 1024; i++ ) {
+      for ( i = 0; i < 2048; i++ ) {    // for Mega 2560 increase to 2048
         EEPROM.get(i, temp);
         myFile.print(i);
         myFile.print(" ");
