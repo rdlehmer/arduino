@@ -1,5 +1,5 @@
-                                             // Version v0.6.0a
-// Ron Lehmer   2023-11-22
+                                             // Version v0.6.1
+// Ron Lehmer   2023-1209
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -17,6 +17,7 @@
 #define SD_SYSTEM
 #define NETWORK_SYSTEM
 #define POWER_SYSTEM
+#define TURNOUT_SYSTEM
 
 //#define PCF8574_LOW_MEMORY
 
@@ -67,19 +68,23 @@
 /// Global variables
 ///
 
+#ifdef TURNOUT_SYSTEM
 PCF8574 toggle1(32);
 PCF8574 toggle2(33);
 
 MCP23017 turnoutA(36);
 MCP23017 turnoutB(37);
 MCP23017 turnoutC(38);
+#endif
 
 #ifdef POWER_SYSTEM
 MCP23017 power(39);
 #endif
 
+#ifdef TURNOUT_SYSTEM
 PCF8574 indicator1(56);
 PCF8574 indicator2(57);
+#endif
 
 String consoleBuffer;
 struct StringObject {
@@ -131,7 +136,7 @@ String serial2ReceiveBuffer;
 ///
 /// Classes
 ///
-
+#ifdef TURNOUT_SYSTEM
 ///
 /// cmrs_toggle - instantiate a toggle switch 
 ///  _state - last observed state
@@ -724,6 +729,8 @@ class CMRSindicators {
     cmrs_indicator indicators[8];
     
 };
+#endif
+
 
 #ifdef POWER_SYSTEM
 ///
@@ -802,11 +809,13 @@ class CMRSpower {
 ///
 /// Class instantation
 ///
-
+#ifdef TURNOUT_SYSTEM
 CMRStoggles     TheToggles;
 CMRSturnouts    TheTurnouts;
 CMRSindicators  TheIndicators;
 CMRSquadSensors TheQuadSensors;
+#endif
+
 #ifdef POWER_SYSTEM
 CMRSpower		ThePowerSystem;
 #endif
@@ -818,7 +827,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.0a");
+  Serial.println("CMRS CP_2560 v0.6.1");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -829,11 +838,14 @@ void setup() {
   Wire.begin();
   scan_i2c();
 
+#ifdef TURNOUT_SYSTEM
   TheToggles.init();
   TheTurnouts.init();
   TheQuadSensors.init();
 //  TheTurnouts.show();
   TheIndicators.init();
+#endif
+
 #ifdef POWER_SYSTEM
   ThePowerSystem.init();
   Serial1.begin(9600);
@@ -877,9 +889,15 @@ void loop() {
     if ( c != 10 )
       serial1ReceiveBuffer = String(serial1ReceiveBuffer+String(c));
     if ( c == 10 ) {
+      commandBuffer = String();
       Serial.print("Serial1 Receive: ");
-      Serial.println(serial1ReceiveBuffer);
-      commandBuffer = serial1ReceiveBuffer;
+      Serial.println(serial1ReceiveBuffer.c_str());
+      int j = serial1ReceiveBuffer.length();
+      for ( int k = 0 ; k < j/2 ; k++ ) {
+        char t1 = (char)atoi((serial1ReceiveBuffer.substring(2*k,2*k+2)).c_str());
+        commandBuffer = String(commandBuffer+String(t1));
+      }
+      Serial.println(commandBuffer);
       serial1ReceiveBuffer = String();
       processCommandBuffer();  // This is where we process incoming messages
     }
@@ -889,6 +907,7 @@ void loop() {
     if ( c != 10 )
       serial2ReceiveBuffer = String(serial2ReceiveBuffer+String(c));
     if ( c == 10 ) {
+      commandBuffer = String();
       Serial.print("Serial2 Receive: ");
       Serial.println(serial2ReceiveBuffer);
       commandBuffer = serial2ReceiveBuffer;
@@ -921,22 +940,27 @@ void loop() {
     }
 #endif
 
+#ifdef TURNOUT_SYSTEM
     TheToggles.scan();
     setTurnouts();
     setIndicators();
     TheQuadSensors.scan();
+#endif
     
     prevTime += TIME_STEP;
   }
 
+#ifdef TURNOUT_SYSTEM
   if ( currentTime > ( tempTime + 1000 )) {
     tempTime += 1000;
     counts++;
     TheTurnouts.sendTurnoutsStatus((counts+40) % 60);
     TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
   }
+#endif
 }
 
+#ifdef TURNOUT_SYSTEM
 ///
 /// setTurnouts - scans through the turnouts 
 ///   loop through turnouts
@@ -1010,7 +1034,7 @@ void setIndicators() {
     }
   }
 }
-
+#endif
 
 #ifdef POWER_SYSTEM
 
@@ -1103,6 +1127,7 @@ void processCommandBuffer() {
   index2 = commandBuffer.indexOf(" ",index1+1);
   cmdLabel = commandBuffer.substring(index1+1, index2);
   command = commandBuffer.substring(index2+1);
+#ifdef TURNOUT_SYSTEM
   if ( commandBuffer.startsWith("TURNOUT") ) {
     for ( i = 0 ; i < 4*temp ; i ++ ) {
       EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i+1,tempstr);
@@ -1153,6 +1178,7 @@ void processCommandBuffer() {
     jmri_running = 1;
     Serial.println("Connection to JMRI successful.");
   }
+#endif
 #ifdef POWER_SYSTEM
   else if ( commandBuffer.startsWith("KBPOWER") ) {    // KBPOWER nn ON/OFF via Serial
     byte track1 = byte(cmdLabel.toInt());
@@ -1894,4 +1920,21 @@ void scan_i2c() {
 //  942   943   Indicator 2/4
 //  944   959   RESERVED
 //  960   975   Track Power Saved State
-//  976   1023  RESERVED
+//  976  1023   RESERVED
+// 1024	 1039   KBTRACK TRACK 0
+// 1040  1055   KBTRACK TRACK 1
+// 1056  1071   KBTRACK TRACK 2
+// 1072  1087   KBTRACK TRACK 3
+// 1088  1103   KBTRACK TRACK 4
+// 1104  1119   KBTRACK TRACK 5
+// 1120  1135   KBTRACK TRACK 6
+// 1136  1151   KBTRACK TRACK 7
+// 1152  1167   KBTRACK TRACK 8
+// 1168  1183   KBTRACK TRACK 9
+// 1184  1199   KBTRACK TRACK 10
+// 1200  1215   KBTRACK TRACK 11
+// 1216  1231   KBTRACK TRACK 12
+// 1232  1247   KBTRACK TRACK 13
+// 1248  1265   KBTRACK TRACK 14
+// 1266  1281   KBTRACK TRACK 15
+
