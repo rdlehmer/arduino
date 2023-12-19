@@ -1,5 +1,5 @@
-                                             // Version v0.6.0b
-// Ron Lehmer   2023-1130
+                                             // Version v0.6.2a
+// Ron Lehmer   2023-12-16
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -19,8 +19,6 @@
 //#define POWER_SYSTEM
 //#define TURNOUT_SYSTEM
 #define KEYPAD_SYSTEM
-
-//#define PCF8574_LOW_MEMORY
 
 #define ADDRESS_NUMBER_TOGGLE_BOARDS 16
 #define ADDRESS_NUMBER_QUADTURNOUT_BOARDS 18
@@ -64,33 +62,12 @@
 #include <Wire.h>
 #include <PCF8574.h>
 #include <MCP23017.h>
-#ifdef KEYPAD_SYSTEM
 #include <LiquidCrystal_I2C.h>
-#endif
 
 ///
 /// Global variables
 ///
 
-#ifdef TURNOUT_SYSTEM
-PCF8574 toggle1(32);
-PCF8574 toggle2(33);
-
-MCP23017 turnoutA(36);
-MCP23017 turnoutB(37);
-MCP23017 turnoutC(38);
-#endif
-
-#ifdef POWER_SYSTEM
-MCP23017 power(39);
-#endif
-
-#ifdef TURNOUT_SYSTEM
-PCF8574 indicator1(56);
-PCF8574 indicator2(57);
-#endif
-
-#ifdef KEYPAD_SYSTEM
 PCF8574 PanelKeypad(0x026);
 LiquidCrystal_I2C PanelLCDisplay(0x027, 16, 2);
 
@@ -113,9 +90,9 @@ int open_track = 0;
 unsigned long interlockTime;
 int interlockStatus = 0;
 
-#endif
-
 String consoleBuffer;
+String commandBuffer;
+
 struct StringObject {
   char nameLabel[7];
 };
@@ -145,709 +122,9 @@ static long counts = 0;
 static unsigned long tempTime = 0;
 static int run_first_time = 1;
 
-#ifdef NETWORK_SYSTEM
-
-static long reconnect_timer = 0;
-EthernetClient client;
-static byte jmri_running = 0;
-String commandBuffer;
-String receiveBuffer;
-
-#endif
-
-#ifdef POWER_SYSTEM
-
 String serial1ReceiveBuffer;
 String serial2ReceiveBuffer;
 
-#endif
-
-///
-/// Classes
-///
-#ifdef TURNOUT_SYSTEM
-///
-/// cmrs_toggle - instantiate a toggle switch 
-///  _state - last observed state
-///		0 - neutral
-///		1 - throw
-///     2 - close
-///  set(byte) - sets state
-///  get()     - returns state
-///
-
-class cmrs_toggle {
-  public:
-    cmrs_toggle() {
-     _state = 0;
-    }
-    
-    ~cmrs_toggle() {
-    }
-    
-    void set(byte arg) {
-      _state = arg;
-    }
-    
-    byte get() {
-      return _state;
-    }
-    
-  private:
-    byte _state;
-    
-};
-
-///
-/// CMRStoggles - collection of toggle switches
-///  init()           - initializes boards defined
-///  scan()           - reads inputs from Toggle boards and sets individual toggles
-///  getToggles(byte) - get state of i-th toggle
-///
-
-class CMRStoggles {
-  public:
-    CMRStoggles() {
-    }
-    
-    ~CMRStoggles() {
-    }
-    
-    void init() {
-      byte temp;
-      int i;
-      EEPROM.get(ADDRESS_NUMBER_TOGGLE_BOARDS,temp);
-      _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Toggle boards.");
-#endif
-      if ( _boards > 0 ) {
-        for ( i = 0; i < 8; i++ ) {
-          toggle1.pinMode(i, INPUT_PULLUP);
-          if ( _boards > 1 ) toggle2.pinMode(i, INPUT_PULLUP);
-        }
-        toggle1.begin();
-        if ( _boards > 1 ) toggle2.begin();
-      }
-    }
-    
-    void scan() {
-      int i;
-      byte tempa,tempb;
-      for ( i = 0 ; i < 4*_boards ; i++ ) {
-        if ( i < 4 ) {
-          tempa = toggle1.digitalRead(2*i);
-          tempb = toggle1.digitalRead(2*i+1);
-        } else if ( i < 8 ) {
-          tempa = toggle2.digitalRead(2*(i-4));
-          tempb = toggle2.digitalRead(2*(i-4)+1);
-        }
-        if ( tempa == LOW ) {
-          toggles[i].set(1);       
-        }
-        else if ( tempb == LOW ) {
-          toggles[i].set(2);
-        }
-        else {
-          toggles[i].set(0);
-        }
-        prevtoggles[i].set(toggles[i].get());
-      }
-    }
-    
-    int getToggle(int arg) {
-      return toggles[arg].get();
-    }
-    
-  private:
-    cmrs_toggle toggles[8];
-    cmrs_toggle prevtoggles[8];
-    int _boards;
-    
-};
-
-///
-/// cmrs_turnout - turnout class
-///  init() - set up hardware boards and read in saved state from memory
-///  set(byte) - take active toggle commmand and determine if switch needs to change
-///              and calls private methods to throw or close switch
-///  getControl() - returns which toggle channel controls switch locally
-///
-
-class cmrs_turnout {
-  public:
-    cmrs_turnout() {
-      _state = 0;
-      _channel = 0;
-    }
-    
-    ~cmrs_turnout() {
-    }
-    
-    void init(byte i, byte j) {
-      byte temp;
-      _control_channel = j;
-      _channel = i+1;
-      EEPROM.get(QUADTURNOUT_STATE_BASEADD+i,temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Turnout ");
-      Serial.print(i);
-      Serial.print(" Toggle ");
-      Serial.print(j);
-      Serial.print(" Initial State ");
-      Serial.println(temp);
-#endif
-      if (temp == 1) {
-        if ( i < 4 ) {
-          turnoutA.pinMode(2*i, OUTPUT, LOW);
-          turnoutA.pinMode(2*i+1, OUTPUT, HIGH);
-        }
-        else if ( i < 8 ) {
-          turnoutB.pinMode(2*(i-4), OUTPUT, LOW);
-          turnoutB.pinMode(2*(i-4)+1, OUTPUT, HIGH);
-        }
-        else if ( i < 12 ) {
-          turnoutC.pinMode(2*(i-8), OUTPUT, LOW);
-          turnoutC.pinMode(2*(i-8)+1, OUTPUT, HIGH);
-        }
-        _state = 1;
-      }
-      else {
-        if ( i < 4 ) {
-          turnoutA.pinMode(2*i, OUTPUT, HIGH);
-          turnoutA.pinMode(2*i+1, OUTPUT, LOW);
-        }
-        else if ( i < 8 ) {
-          turnoutB.pinMode(2*(i-4), OUTPUT, HIGH);
-          turnoutB.pinMode(2*(i-4)+1, OUTPUT, LOW);
-        }
-        else if ( i < 12 ) {
-          turnoutC.pinMode(2*(i-8), OUTPUT, HIGH);
-          turnoutC.pinMode(2*(i-8)+1, OUTPUT, LOW);
-        }
-        _state = 0;
-      } 
-    }
-    
-    void set(byte control_status) {
-      byte _stx = 0;
-#ifdef NETWORK_SYSTEM
-      _stx = sethw(control_status);
-      if ( _stx == 1 ) sendUpdate();
-#endif
-    }
-    
-    byte sethw(byte control_status) {
-      byte ret_val = 0;
-      if ( control_status != 0 ) {
-        if (( _state == 0 ) && ( control_status == 1 )) {
-          turnout_throw();
-          ret_val = 1;
-        }
-        else if (( _state == 1 ) && ( control_status == 2 )) {
-          turnout_close();
-          ret_val = 1;
-        }
-      }
-      return ret_val;
-    }
-    
-    byte getControl() {
-      return _control_channel;
-    }
-    
- #ifdef NETWORK_SYSTEM   
-    void sendUpdate() {
-      char tempstr[7];
-      if (( client.connected() ) && ( jmri_running == 1 )) {
-        String tempStr;
-        EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*(_channel-1)+1,tempstr);
-        tempStr = String(tempstr);
-        if ( tempStr.length() != 0 ) {
-          tempStr = String("TURNOUT "+String(tempstr));
-          if ( _state == 0 ) {
-            tempStr = String(tempStr+" CLOSED");
-          }
-          else if ( _state == 1 ) {
-            tempStr = String(tempStr+" THROWN");       
-          }
-          else {
-            tempStr = String(tempStr+" UNKNOWN");       
-          }
-          Serial.print("Send: ");
-          Serial.println(tempStr);
-          if (client.connected()) client.println(tempStr);
-        }
-      }
-    }
-#endif
-
-  private:
-    void turnout_throw() {
-      _state = 1;
-      byte _chn = _channel - 1;
-      if ( _chn < 4 ) {
-        turnoutA.digitalWrite(2*_chn, LOW);
-        turnoutA.digitalWrite(2*_chn+1, HIGH);
-      }
-      else if ( _chn < 8 ) {
-        turnoutB.digitalWrite(2*(_chn-4), LOW);
-        turnoutB.digitalWrite(2*(_chn-4)+1, HIGH);
-      }
-      else if ( _chn < 12 ) {
-        turnoutC.digitalWrite(2*(_chn-8), LOW);
-        turnoutC.digitalWrite(2*(_chn-8)+1, HIGH);
-      }
-      EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
-#ifdef DBGLVL2
-      Serial.print("throw: channel ");
-      Serial.println(_channel);
-#endif
-    }
-
-    void turnout_close() {
-      _state = 0;
-      byte _chn = _channel - 1;
-      if ( _chn < 4 ) {
-        turnoutA.digitalWrite(2*_chn, HIGH);
-        turnoutA.digitalWrite(2*_chn+1, LOW);
-      }
-      else if ( _chn < 8 ) {
-        turnoutB.digitalWrite(2*(_chn-4), HIGH);
-        turnoutB.digitalWrite(2*(_chn-4)+1, LOW);
-      }
-      else if ( _chn < 12 ) {
-        turnoutC.digitalWrite(2*(_chn-8), HIGH);
-        turnoutC.digitalWrite(2*(_chn-8)+1, LOW);
-      }
-      EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
-#ifdef DBGLVL2
-      Serial.print("close: channel ");
-      Serial.println(_channel);
-#endif
-    }
-  
-    byte _state;
-    byte _channel;
-    byte _control_channel;
-};
-
-///
-/// CMRSquadSensor
-///
-
-class CMRSquadSensors {
-  public:
-    CMRSquadSensors() {
-    }
-    
-    ~CMRSquadSensors() {
-    }
-    
-    void init() {
-      byte temp;
-      int i;
-      EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
-      _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Quad sensor overlays.");
-#endif
-      if ( _boards > 0 ) {
-        for ( i = 0; i < 8; i++ ) {
-          turnoutA.pinMode(i+8, INPUT_PULLUP);
-          if ( _boards > 1 ) turnoutB.pinMode(i+8, INPUT_PULLUP);
-          if ( _boards > 2 ) turnoutC.pinMode(i+8, INPUT_PULLUP);
-        }
-      }
-    }
-    
-    void scan() {
-      QuadSensorObject quadSensorObj;
-      int i;
-      for ( i = 0 ; i < 16 ; i++ ) {
-        EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*i, quadSensorObj);
-        if ( (quadSensorObj.boardNumber != 0) && (quadSensorObj.boardNumber <= _boards) 
-             && (quadSensorObj.sensorChannel != 0) && (quadSensorObj.sensorChannel <= 8) 
-             && (quadSensorObj.sensorNumber != 0) && (quadSensorObj.sensorNumber != 255)) {
-          byte temp = 0;
-          switch ( quadSensorObj.boardNumber ) {
-            case 1: temp = turnoutA.digitalRead(quadSensorObj.sensorChannel+7);
-              break;
-            case 2: temp = turnoutB.digitalRead(quadSensorObj.sensorChannel+7);
-              break;
-            case 3: temp = turnoutC.digitalRead(quadSensorObj.sensorChannel+7);
-              break;
- // sensorChannel definition changed for Rev C and beyond boards
-          }
-          if ( temp == LOW ) {
-            quadSensor[i].set(1);
-          } else {
-            quadSensor[i].set(0);
-          }
-          if ( prevquadSensor[i].get() != quadSensor[i].get() )
-            sendUpdate(i);
-          prevquadSensor[i].set(quadSensor[i].get());
-        }
-      }
-    }
-    
-    int getQuadSensor(int arg) {
-      return quadSensor[arg].get();
-    }
- 
- #ifdef NETWORK_SYSTEM
-    void sendUpdate(byte arg) {
-      char tempstr[7];
-      if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
-        String tempStr;
-        byte _bo;
-        byte _ch;
-        EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*arg,_bo);
-        EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*arg+1,_ch);
-        if (( _bo != 0 ) && ( _ch != 0 )) {
-          EEPROM.get(QUADTURNOUT_SENSOR_BASEADD+SIZE_OF_QUADTURNOUT_SENSOR*arg+2,tempstr);
-          tempStr = String(tempstr);
-          if ( tempStr.length() != 0 ) {
-            tempStr = String("SENSOR "+tempStr);
-            if ( getQuadSensor(arg) == 0 ) {
-              tempStr = String(tempStr+" INACTIVE");
-            }
-            else if ( getQuadSensor(arg) == 1 ) {
-              tempStr = String(tempStr+" ACTIVE");
-            }
-            else {
-              tempStr = String(tempStr+" UNKNOWN");
-            }
-            Serial.print("Send: ");
-            Serial.println(tempStr);
-            if (client.connected()) client.println(tempStr);
-          }
-        }
-      }   
-    }
-    void sendQuadSensorsStatus(int arg) {
-      if ( ( arg >= 0 ) && ( arg < 16 ) ) {
-        sendUpdate(arg);
-      }
-    }
-#if 0    
-    void sendQuadSensorsStatus() {
-      byte i;
-      for ( i = 0 ; i < 16 ; i++ ) {
-        sendUpdate(i);
-      }
-    }
-#endif
-#endif   
-  private:
-    cmrs_toggle quadSensor[16];
-    cmrs_toggle prevquadSensor[16];
-    int _boards;
-    
-};
-
-
-
-///
-/// CMRSturnouts - collection of turnouts
-///  init() - initialize turnout boards and channels
-///  getControl(byte) - returns the toggle channel for i-th turnout
-///  setControl(byte,byte) - sends the state (j) for the i-th turnout
-///
-
-class CMRSturnouts {
-  public:
-    CMRSturnouts() {
-    }
-    
-    ~CMRSturnouts() {
-    }
-    
-    void init() {
-      byte temp;
-      int i;
-      EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
-      _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Turnout boards.");
-#endif
-      if ( _boards > 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          turnout[i].init(i, EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i));
-        }
-      }
-    }
-    
-    byte getControl(byte arg) {
-      return turnout[arg].getControl();
-    }
-    
-    void setControl(byte arg, byte val) {
-      turnout[arg].set(val);
-    }
-    
-    void setRemote(byte arg, byte val) {
-      turnout[arg].sethw(val);
-      setSlavedControl(arg, val);
-    }
-    
-#ifdef NETWORK_SYSTEM
-    void sendTurnoutsStatus(int arg) {
-      if ( _boards > 0 ) {
-        if (( arg >= 0 ) && ( arg < 4*_boards )) {
-          turnout[arg].sendUpdate();
-        }
-      }
-    }
-#if 0
-    void sendTurnoutsStatus() {
-      int i;
-      if ( _boards > 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          turnout[i].sendUpdate();
-        }
-      }
-    }
-#endif
-#endif
-
-#if 0
-    void show() {
-      int i;
-      if ( _boards > 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          Serial.print("show: i = ");
-          Serial.print(i);
-          byte temp;
-          temp = turnout[i].getControl();
-          Serial.print(" control ");
-          Serial.println(temp);                                                                                                                                                                        
-        }
-      }
-    }
-#endif
-
-  private:
-    void setSlavedControl(byte arg, byte val) {
-      int i;
-      byte master;
-      byte temp;
-      master = getControl(arg);
-      if ( master != 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          temp = getControl(i);
-          if (( i != arg ) && ( master == temp )) {
-            setControl(i, val);
-          }
-        }
-      }
-    }
-    
-    int _boards;
-    cmrs_turnout turnout[12];
-    
-};
-
-///
-/// cmrs_indicator - indicator
-///  init(byte) - sets the channel number
-///  set(byte)  - sets the hardware state of the indicator
-///  get()      - returns the state of the indicator
-///
-
-class cmrs_indicator {
-  public:
-    cmrs_indicator() {
-      _state = 0;
-    }
-    
-    ~cmrs_indicator() {    
-    }
-    
-    void init (byte arg) {
-      _channel = arg;
-    }
-    
-    void set(byte arg) {
-      _state = arg;
-      if ( _channel < 4 ) {
-        switch ( _state ) {
-          case 1 : indicator1.digitalWrite(2*_channel, LOW);
-                 indicator1.digitalWrite(2*_channel+1, HIGH);
-                 break;
-          case 2 : indicator1.digitalWrite(2*_channel, HIGH);
-                 indicator1.digitalWrite(2*_channel+1, LOW);
-                 break;
-          default : indicator1.digitalWrite(2*_channel, HIGH);
-                 indicator1.digitalWrite(2*_channel+1, HIGH);
-                 break; 
-        }
-      }
-      else {
-        switch ( _state ) {
-          case 1 : indicator2.digitalWrite(2*(_channel-4), LOW);
-                 indicator2.digitalWrite(2*(_channel-4)+1, HIGH);
-                 break;
-          case 2 : indicator2.digitalWrite(2*(_channel-4), HIGH);
-                 indicator2.digitalWrite(2*(_channel-4)+1, LOW);
-                 break;
-          default : indicator2.digitalWrite(2*(_channel-4), HIGH);
-                 indicator2.digitalWrite(2*(_channel-4)+1, HIGH);
-                 break; 
-        }      
-      }
-    }
-    
-    byte get() {
-      return _state;
-    }
-    
-  private:
-    byte _state;
-    byte _channel;
-    
-};
-
-///
-/// CMRSindicators - collection of indicators
-///  init() - initialize hardware indicator boards and indicator channel numbers
-///  set(byte,byte) - sets the i-th indicator with state j
-///
-
-class CMRSindicators {
-  public:
-    CMRSindicators() {    
-    }
-    
-    ~CMRSindicators() {  
-    }
-    
-    void init() {
-      byte temp;
-      int i;
-      EEPROM.get(ADDRESS_NUMBER_INDICATOR_BOARDS, temp);
-      _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Indicator boards.");
-#endif
-      if ( _boards > 0 ) {
-        for ( i = 0; i < 8; i++ ) {
-          indicators[i].init(i);
-          indicator1.pinMode(i, OUTPUT, HIGH);
-          if ( _boards > 1 ) indicator2.pinMode(i, OUTPUT, HIGH);
-        }
-        indicator1.begin();
-        if ( _boards > 1 ) indicator2.begin();
-      }
-    }
-    
-    void set(byte arg, byte val) {
-      indicators[arg].set(val);
-    }
-    
-  private:
-    int _boards;
-    cmrs_indicator indicators[8];
-    
-};
-#endif
-
-
-#ifdef POWER_SYSTEM
-///
-/// Power System
-///
-
-class CMRSpower {
-  public:
-    CMRSpower() {
-    
-    }
-    
-    ~CMRSpower() {
-    
-    }
-    
-    void init() {
-      int track, pin;
-      byte temp;
-      for ( track = 1 ; track < 17 ; track++ ) {
-        EEPROM.get(TRACKPOWER_BASEADD+(track-1), temp);
-        power_status[track-1].set(temp);
-        if ( (track % 2) == 0 ) {
-          pin = 7 + track/2;
-        }
-        else {
-          pin = track/2;
-        }
-        if ( temp == 1 ) {
-          power.pinMode(pin, OUTPUT, LOW );
-#ifdef DBGLVL2
-          Serial.print("CMRSpower init(): ");
-          Serial.print(pin);
-          Serial.print(temp);
-          Serial.println(" LOW");
-#endif
-        }
-        else {
-          power.pinMode(pin, INPUT_PULLUP );
-#ifdef DBGLVL2
-          Serial.print("CMRSpower init(): ");
-          Serial.print(pin);
-          Serial.print(temp);
-          Serial.println(" HIGH");
-#endif        
-        }
-      }
-    }
-    
-    void set(byte arg, byte val) {
-      int pin;  
-      if ( (arg % 2) == 0 ) {
-        pin = 7 + arg/2;
-      }
-      else {
-        pin = arg/2;
-      }
-      if ( val == 1 ) {
-        power.pinMode(pin, OUTPUT, LOW );
-        EEPROM.update(TRACKPOWER_BASEADD+(arg-1), byte(1));
-        power_status[arg-1].set(1);
-      }
-      else {
-        power.pinMode(pin, INPUT_PULLUP );
-        EEPROM.update(TRACKPOWER_BASEADD+(arg-1), byte(0));
-        power_status[arg-1].set(0);
-      }
-    }
-    
-  private:
-    cmrs_toggle power_status[16];
-};
-
-#endif
-
-///
-/// Class instantation
-///
-#ifdef TURNOUT_SYSTEM
-CMRStoggles     TheToggles;
-CMRSturnouts    TheTurnouts;
-CMRSindicators  TheIndicators;
-CMRSquadSensors TheQuadSensors;
-#endif
-
-#ifdef POWER_SYSTEM
-CMRSpower		ThePowerSystem;
-#endif
 
 ///
 ///  BEGIN SETUP
@@ -856,7 +133,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.0b");
+  Serial.println("CMRS CP_2560_keypad v0.6.2a 2023-12-16");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -867,21 +144,6 @@ void setup() {
   Wire.begin();
   scan_i2c();
 
-#ifdef TURNOUT_SYSTEM
-  TheToggles.init();
-  TheTurnouts.init();
-  TheQuadSensors.init();
-//  TheTurnouts.show();
-  TheIndicators.init();
-#endif
-
-#ifdef POWER_SYSTEM
-  ThePowerSystem.init();
-  Serial1.begin(9600);
-  Serial2.begin(9600);
-#endif
-
-#ifdef KEYPAD_SYSTEM
   EEPROM.get(976,MAXYARDTRACKS);
   Serial1.begin(9600);
   Serial2.begin(9600);
@@ -889,7 +151,6 @@ void setup() {
   PanelKeypad.begin();
   PanelLCDisplay.begin(40,2);
   LCDisplay_init();
-#endif
 
 }
 
@@ -904,7 +165,6 @@ void loop() {
   if ( currentTime < tempTime )
     tempTime = currentTime;
 
-#ifdef KEYPAD_SYSTEM 
   char keystroke;
   keystroke = read_keypad();
   if ( keystroke != NULL ) {
@@ -925,35 +185,18 @@ void loop() {
     }
   }
   scan_column();
-#endif
 
-#ifdef NETWORK_SYSTEM
-  if (( run_first_time == 1 ) && ( reconnect_timer == 0 )) {
-    connectServer();
-    run_first_time = 0;
-    reconnect_timer = 60000;
-  }
-  if (client.available()) {
-    char c = client.read();
-    if ( c != 10 )
-      receiveBuffer = String(receiveBuffer+String(c));
-    if ( c == 10 ) {
-      Serial.print("Receive: ");
-      Serial.println(receiveBuffer);
-      commandBuffer = receiveBuffer;
-      receiveBuffer = String();
-      processCommandBuffer();  // This is where we process incoming messages
-    }
-  }
-#ifdef POWER_SYSTEM
   if (Serial1.available()) {
     int c = Serial1.read();
     if ( c != 10 )
       serial1ReceiveBuffer = String(serial1ReceiveBuffer+String(c));
     if ( c == 10 ) {
-      Serial.print("Serial1 Receive: ");
-      Serial.println(serial1ReceiveBuffer);
-      commandBuffer = serial1ReceiveBuffer;
+      int j = serial1ReceiveBuffer.length();
+      for ( int k = 0 ; k < j/2 ; k++ ) {
+        char t1 = (char)atoi((serial1ReceiveBuffer.substring(2*k,2*k+2)).c_str());
+        commandBuffer = String(commandBuffer+String(t1));
+      }
+      Serial.println(commandBuffer);
       serial1ReceiveBuffer = String();
       processCommandBuffer();  // This is where we process incoming messages
     }
@@ -963,60 +206,22 @@ void loop() {
     if ( c != 10 )
       serial2ReceiveBuffer = String(serial2ReceiveBuffer+String(c));
     if ( c == 10 ) {
-      Serial.print("Serial2 Receive: ");
-      Serial.println(serial2ReceiveBuffer);
-      commandBuffer = serial2ReceiveBuffer;
+      int j = serial2ReceiveBuffer.length();
+      for ( int k = 0 ; k < j/2 ; k++ ) {
+        char t1 = (char)atoi((serial2ReceiveBuffer.substring(2*k,2*k+2)).c_str());
+        commandBuffer = String(commandBuffer+String(t1));
+      }
+      Serial.println(commandBuffer);
       serial2ReceiveBuffer = String();
       processCommandBuffer();  // This is where we process incoming messages
     }
   }
-#endif
-    // if the server's disconnected, stop the client:
-  if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
-    Serial.println();
-    Serial.println("disconnecting.");
-    client.stop();
-    // do nothing:
-    run_first_time = 2;  //waiting for timer
-    jmri_running = 0;
-    reconnect_timer = 60000;
-  }  
-#endif
-  
+
   if ( currentTime > ( prevTime + TIME_STEP ) ) {
-
-
-#ifdef NETWORK_SYSTEM  
-    if ( ( reconnect_timer > 0 ) && ( run_first_time == 2 ) ) {
-      reconnect_timer = reconnect_timer - TIME_STEP;
-    }
-    if ( reconnect_timer <= 0 ) {
-      reconnect_timer = 0;
-      run_first_time = 1;
-    }
-#endif
-
-#ifdef TURNOUT_SYSTEM
-    TheToggles.scan();
-    setTurnouts();
-    setIndicators();
-    TheQuadSensors.scan();
-#endif
-    
     prevTime += TIME_STEP;
   }
-
-#ifdef TURNOUT_SYSTEM
-  if ( currentTime > ( tempTime + 1000 )) {
-    tempTime += 1000;
-    counts++;
-    TheTurnouts.sendTurnoutsStatus((counts+40) % 60);
-    TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
-  }
-#endif
 }
 
-#ifdef KEYPAD_SYSTEM
 
 void keypad_init() {
   PanelKeypad.pinMode(P0, INPUT_PULLUP);
@@ -1130,16 +335,13 @@ void update_scratchpad(char arg_char) {
 }
 
 void line_for_mainline() {
-//  String command;
   char command[20] = "KBTRACK 0 SELECT\n";
+  EEPROM.put(959,0);
   Serial.println("\nLine for Main.");
   LCDisplayClearSecondLine();
-  PanelLCDisplay.setCursor(0,1);
-  PanelLCDisplay.printstr("Lined for Main\0)");
+  LCDisplayShowTrack();
   update_scratchpad('0');
   update_scratchpad('0');
-  EEPROM.put(959,0);
-//  command = "KBTRACK 0 SELECT";
   Serial.print("Command: ");
   Serial.println(command);
   Serial1.write(command,strlen(command));
@@ -1147,7 +349,6 @@ void line_for_mainline() {
 
 void line_for_yard(int arg_val) {
   int temp;
-//  String command;
   char command[20] = "KBTRACK ";
   char ctemp[3];
   if ( arg_val != -1 ) {
@@ -1163,16 +364,11 @@ void line_for_yard(int arg_val) {
     update_scratchpad('0');          
   }
   else {
-//    Serial.println(temp, DEC);
+    EEPROM.put(959,byte(temp));   
     LCDisplayClearSecondLine();
-    PanelLCDisplay.setCursor(0,1);
-    PanelLCDisplay.printstr("Track \0");
-//    PanelLCDisplay.printstr(scratchpad);
-    PanelLCDisplay.printstr(itoa(temp,scratchpad,10));
+    LCDisplayShowTrack();
     update_scratchpad('0');
     update_scratchpad('0');  
-    EEPROM.put(959,byte(temp)); 
-//    command = "KBTRACK "+String(temp)+" SELECT";
     strcat(command,itoa(temp,ctemp,10));
     strcat(command, " SELECT\n");
     Serial.print("Command: ");
@@ -1183,7 +379,6 @@ void line_for_yard(int arg_val) {
 
 void track_power_on(int arg_val) {
   int temp;
-//  String command;
   char command[20] = "KBPOWER ";
   char ctemp[3];
   if ( arg_val != -1 ) {
@@ -1194,17 +389,14 @@ void track_power_on(int arg_val) {
   }
   if ( ( temp > MAXYARDTRACKS ) || ( temp == 0 ) ) {
     Serial.print("\nError selecting track ");
-//    Serial.println(scratchpad);
     update_scratchpad('0');
     update_scratchpad('0');          
   }
   else {
-//    Serial.println(temp, DEC);
     LCDisplayClearSecondLine();
     update_scratchpad('0');
     update_scratchpad('0');  
     EEPROM.put(960+temp-1,byte(1)); 
-//    command = "KBPOWER "+String(temp)+" ON";
     strcat(command,itoa(temp,ctemp,10));
     strcat(command," ON\n");
     Serial.print("Command: ");
@@ -1217,7 +409,6 @@ void track_power_on(int arg_val) {
 
 void track_power_off(int arg_val) {
   int temp;
-//  String command;
   char command[20] = "KBPOWER ";
   char ctemp[3];
   if ( arg_val != -1 ) {
@@ -1234,15 +425,9 @@ void track_power_off(int arg_val) {
   }
   else {
     Serial.println(temp, DEC);
-//    LCDisplayClearSecondLine();
-//    PanelLCDisplay.setCursor(0,1);
-//    PanelLCDisplay.printstr("Track \0");
-//    PanelLCDisplay.printstr(scratchpad);
-//    PanelLCDisplay.printstr(itoa(temp,scratchpad,10));
     update_scratchpad('0');
     update_scratchpad('0');  
     EEPROM.put(960+temp-1,byte(0)); 
-//    command = "KBPOWER "+String(temp)+" OFF";
     strcat(command,itoa(temp,ctemp,10));
     strcat(command," OFF\n");
     Serial.print("Command: ");
@@ -1250,6 +435,20 @@ void track_power_off(int arg_val) {
     Serial1.write(command,strlen(command));
     Serial2.write(command,strlen(command));
     LCDisplayShowPowerLines();
+  }
+}
+
+void LCDisplayShowTrack() {
+  byte temp;
+  EEPROM.get(959,temp);
+  if ( temp == 0 ) {
+    PanelLCDisplay.setCursor(0,1);
+    PanelLCDisplay.printstr("Lined for Main\0)");   
+  }
+  else {
+    PanelLCDisplay.setCursor(0,1);
+    PanelLCDisplay.printstr("Track \0");
+    PanelLCDisplay.printstr(itoa(temp,scratchpad,10)); 
   }
 }
 
@@ -1280,10 +479,10 @@ void LCDisplayShowPowerLines() {
       PanelLCDisplay.printstr(itoa(i+1,stemp,10));
     }
   }
+  LCDisplayShowTrack();
 }
 
 void LCDisplayClearSecondLine() {
-//  PanelLCDisplay.setCursor(0,1);
   for (int i = 0; i < 20; i++) {
     PanelLCDisplay.setCursor(i,1);
     PanelLCDisplay.write(' ');
@@ -1291,246 +490,33 @@ void LCDisplayClearSecondLine() {
 }
 
 
-#endif
-
-
-#ifdef TURNOUT_SYSTEM
-///
-/// setTurnouts - scans through the turnouts 
-///   loop through turnouts
-///   get toggle number that controls turnout
-///   If turnout is active ( control > 0 ) then
-///     get toggle state
-///     pass it turnout if state is other than neutral
-///
-
-void setTurnouts() {
-  byte temp;
-  int i;
-  EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
-  for ( i = 0 ; i < 4*temp ; i++ ) {
-    byte _control, _state;
-//    _control = TheTurnouts.getControl(i);
-    _control = EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i);
-
-    if ( _control > 0 ) {
-#ifdef DBGLVL2
-      Serial.print("Turnout ");
-      Serial.print(i);
-      Serial.print(" Control ");
-      Serial.println(_control);
-#endif
-      _state = TheToggles.getToggle(_control-1);
-      if ( _state != 0 ) {
-        TheTurnouts.setControl(i, _state);
-#ifdef DBGLVL2
-        Serial.print("Turnout ");
-        Serial.print(i);
-        Serial.print(" state ");
-        Serial.println(_state);
-#endif
-      }
-    }
-  } 
-}
-
-///
-/// setIndicators - set indicators
-///  scan for source of indicator information
-///   directly from turnout state (first memory value) unless it is set to 0
-///   then take state data from the j-th Sensor element
-///
-
-void setIndicators() {
-  int i;
-  byte _control[2];
-  byte _boards,temp;
-  EEPROM.get(ADDRESS_NUMBER_INDICATOR_BOARDS, _boards);
-  for ( i = 0; i < 4*_boards; i++ ) {
-    EEPROM.get(INDICATOR_BASEADD+2*i,_control);
-    if ( _control[0] != 0 ) {
-      EEPROM.get(QUADTURNOUT_STATE_BASEADD+_control[0]-1,temp);
-      TheIndicators.set(i,temp+1);
-#ifdef DBGLVL2
-      Serial.print("Indicator: set channel ");
-      Serial.print(i);
-      Serial.print(" val ");
-      Serial.println(temp+1);
-#endif
-    }
-    else if ( _control[1] != 0 ) {
-//    TBD - sensors
-      temp = TheQuadSensors.getQuadSensor(_control[1]-1);
-      TheIndicators.set(i,temp+1);
-    }
-    else {
-      TheIndicators.set(i,0);
-    }
-  }
-}
-#endif
-
-#ifdef POWER_SYSTEM
-
-//
-// set_yard_turnouts
-// Read in the 16 turnout settings to get into a support yeard track.
-//  If value is set to 0, then send a 2 - close to the turnout
-//  If value is set to 1, then send a 1 - throw the turnout
-//  track = 0 means line all lead switches for the mainline
-//
-
-void set_yard_turnouts(byte track) {
-  TrackMapObject _track_map;
-  byte i;
-  if ( track < 16 ) {
-    EEPROM.get(TRACKMAP_BASEADD+track*16, _track_map);
-    byte temp1;
-    for ( i = 0 ; i < 12 ; i++ ) {   // only support 12 turnouts currently
-      temp1 = 2 - _track_map.turnout[i];
-      TheTurnouts.setControl(i,temp1); 
-    }
-  }
-}
-
-#endif
-
-//////////////////////////////////////////////////////////////////////
-//
-//  NETWORK SYSTEM
-//
-//////////////////////////////////////////////////////////////////////
-
-#ifdef NETWORK_SYSTEM
-
-byte connectServer() {
-  byte ret_val;
-  byte mac[6];
-  byte ipAddr[4];   
-  byte serveripAddr[4];
-
-  static byte Efirst = 1;
-
-  EEPROM.get(0, mac);
-  EEPROM.get(8, ipAddr);
-  EEPROM.get(12, serveripAddr);
-
-  IPAddress ip(ipAddr);
-  IPAddress server(serveripAddr);
-
-  Ethernet.begin(mac, ip);
-
-  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-    Serial.println("Ethernet Hardware Error");
-#if 0
-    while (true) {
-      delay(1); // do nothing, no point running without Ethernet hardware
-    }
-#endif
-  }
-  while (Ethernet.linkStatus() == LinkOFF) {
-    Serial.println("Ethernet cable is not connected.");
-    delay(500);
-  }
-
-  // give the Ethernet shield a second to initialize:
-  if ( Efirst == 1 ) {
-//    delay(1000);
-    Efirst = 0;
-  }
-  Serial.println("connecting...");
-
-  // if you get a connection, report back via serial:
-  if (ret_val = client.connect(server, 2048)) {
-    Serial.println("connected");
-  } else {
-    // if you didn't get a connection to the server:
-    Serial.println("connection failed");
-  }
-}
-
 void processCommandBuffer() {
   int index1,index2;
   int i;
   char tempstr[7];
-  byte temp;
-  EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
   String cmdLabel, command, tempStr;
   
   index1 = commandBuffer.indexOf(" ");
   index2 = commandBuffer.indexOf(" ",index1+1);
   cmdLabel = commandBuffer.substring(index1+1, index2);
   command = commandBuffer.substring(index2+1);
-#ifdef TURNOUT_SYSTEM
-  if ( commandBuffer.startsWith("TURNOUT") ) {
-    for ( i = 0 ; i < 4*temp ; i ++ ) {
-      EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i+1,tempstr);
-      tempStr = String(tempstr);
-      tempStr.trim();
-      if ( tempStr == cmdLabel ) {
-        if ( command.startsWith("CLOSED") ) {
-#ifdef DBGLVL2
-          Serial.print("CommandBuffer: setRemote CLOSED ");
-          Serial.println(i);
-#endif
-          TheTurnouts.setRemote(i,2);
-        } else if ( command.startsWith("THROWN") ) {
-#ifdef DBGLVL2
-          Serial.print("CommandBuffer: setRemote THROWN ");
-          Serial.println(i);
-#endif
-          TheTurnouts.setRemote(i,1);
-        }          
-      }
-    }
-  } else if ( commandBuffer.startsWith("SENSOR") ) {
-#ifdef SIGNAL_SYSTEM
-    for ( i = 0 ; i < N_SIGNALS ; i++ ) {
-      EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+17,tempstr);
-      tempStr = String(tempstr);
-      if ( tempStr == cmdLabel ) {
-        if ( command.startsWith("ACTIVE") ) {
-          stateRemoteSensor[i] = 1;
-        } else if ( command.startsWith("INACTIVE") ) {
-          stateRemoteSensor[i] = 0;
-        }
-      }
-    }
-#endif
-  } else if ( commandBuffer.startsWith("SIGNALHEAD") ) {
-#ifdef SIGNAL_SYSTEM
-    for ( i = 0 ; i < N_SIGNALS ; i++ ) {
-      EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+10,tempstr);
-      tempStr = String(tempstr);
-      if ( tempStr == cmdLabel ) {
-        stateLeadingSignal[i] = signalAspectToCode(command);
-//        Serial.println(stateLeadingSignal[i]);       
-      }
-    }  
-#endif  
-  } else if ( commandBuffer.startsWith("NODE jmri") ) {
-    jmri_running = 1;
-    Serial.println("Connection to JMRI successful.");
-  }
-#endif
-#ifdef POWER_SYSTEM
-  else if ( commandBuffer.startsWith("KBPOWER") ) {    // KBPOWER nn ON/OFF via Serial
+
+  if ( commandBuffer.startsWith("KBPOWER") ) {    // KBPOWER nn ON/OFF via Serial
     byte track1 = byte(cmdLabel.toInt());
     if ( command.startsWith("ON") ) {
-      ThePowerSystem.set(track1,1);
+ //     ThePowerSystem.set(track1,1);
+      EEPROM.put(960+track1-1,byte(1));
     } else if ( command.startsWith("OFF") ) {
-      ThePowerSystem.set(track1,0);
+ //     ThePowerSystem.set(track1,0);
+      EEPROM.put(960+track1-1,byte(0));
     }
   } else if ( commandBuffer.startsWith("KBTRACK") ) {  // KBTRACK nn SELECT via Serial
     byte track1 = byte(cmdLabel.toInt());
-    set_yard_turnouts(track1);
+//    set_yard_turnouts(track1);
+    EEPROM.put(959,byte(track1));
   }
-#endif
+  commandBuffer = "";
 }
-
-
-#endif
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //

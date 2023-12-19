@@ -1,5 +1,5 @@
-                                             // Version v0.6.1
-// Ron Lehmer   2023-1209
+                                             // Version v0.6.2
+// Ron Lehmer   2023-12-19
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -800,6 +800,34 @@ class CMRSpower {
       }
     }
     
+    void sendUpdate(byte arg) {
+      byte temp;
+     if ( arg == 0 ) {
+        char command[20] = "KBTRACK ";
+        char ctemp[3];     
+        EEPROM.get(959,temp);
+        strcat(command,itoa(int(temp),ctemp,10));
+        strcat(command, " SELECT\n");
+//        Serial.print("Command send: ");
+//        Serial.println(command);
+        Serial1.write(command,strlen(command));           
+      }
+      else if ( arg <= 10 ) {
+        char command[20] = "KBPOWER ";
+        char ctemp[3];
+        strcat(command,itoa(int(arg),ctemp,10));
+        if ( power_status[arg-1].get() == 1 ) {
+          strcat(command," ON\n");
+        }
+        else {
+          strcat(command," OFF\n");
+        }
+//        Serial.print("Command send: ");
+//        Serial.println(command);
+        Serial1.write(command,strlen(command));
+        Serial2.write(command,strlen(command));      
+      }
+    }
   private:
     cmrs_toggle power_status[16];
 };
@@ -827,7 +855,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.1");
+  Serial.println("CMRS CP_2560 v0.6.2 2023-12-19");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -956,6 +984,7 @@ void loop() {
     counts++;
     TheTurnouts.sendTurnoutsStatus((counts+40) % 60);
     TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
+    ThePowerSystem.sendUpdate((counts+4) % 60);
   }
 #endif
 }
@@ -1056,6 +1085,7 @@ void set_yard_turnouts(byte track) {
       temp1 = 2 - _track_map.turnout[i];
       TheTurnouts.setControl(i,temp1); 
     }
+    EEPROM.update(959,track);
   }
 }
 
