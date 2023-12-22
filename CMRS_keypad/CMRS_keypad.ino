@@ -1,5 +1,5 @@
-                                             // Version v0.6.3a
-// Ron Lehmer   2023-12-21
+                                             // Version v0.6.4a
+// Ron Lehmer   2023-12-22
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -24,7 +24,7 @@
 
 #define TRACKMAP_BASEADD 1024
 
-#define TIME_STEP 50
+#define TIME_STEP 60000
 #define UPDATE_TIME 60000
 ///
 /// Global Includes
@@ -80,7 +80,7 @@ struct TrackMapObject {
 
 static unsigned long prevTime = 0;
 static long counts = 0;
-static unsigned long tempTime = 0;
+//static unsigned long tempTime = 0;
 static int run_first_time = 1;
 
 String serial1ReceiveBuffer;
@@ -94,7 +94,7 @@ String serial2ReceiveBuffer;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560_keypad v0.6.3a 2023-12-21");
+  Serial.println("CMRS CP_2560_keypad v0.6.4a 2023-12-22");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
 //  Ethernet.init(10); // Arduino Ethernet board SS  
@@ -123,8 +123,8 @@ void loop() {
   unsigned long currentTime = millis();
   if ( currentTime < prevTime )
     prevTime = currentTime; 
-  if ( currentTime < tempTime )
-    tempTime = currentTime;
+//  if ( currentTime < tempTime )
+//    tempTime = currentTime;
 
   char keystroke;
   keystroke = read_keypad();
@@ -179,10 +179,16 @@ void loop() {
   }
 
   if ( currentTime > ( prevTime + TIME_STEP ) ) {
+    sendPing();
     prevTime += TIME_STEP;
   }
 }
 
+void sendPing() {
+  char command[6] = "PING\n\0";
+  Serial1.write(command,strlen(command));
+  Serial2.write(command,strlen(command));
+}
 
 void keypad_init() {
   PanelKeypad.pinMode(P0, INPUT_PULLUP);
