@@ -1,5 +1,5 @@
-                                             // Version v0.6.2a
-// Ron Lehmer   2023-12-16
+                                             // Version v0.6.3a
+// Ron Lehmer   2023-12-21
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -20,29 +20,6 @@
 //#define TURNOUT_SYSTEM
 #define KEYPAD_SYSTEM
 
-#define ADDRESS_NUMBER_TOGGLE_BOARDS 16
-#define ADDRESS_NUMBER_QUADTURNOUT_BOARDS 18
-#define ADDRESS_NUMBER_INDICATOR_BOARDS 19
-
-#define QUADTURNOUT_STATE_BASEADD 40
-#define TURNOUT_STATE_BASEADD 56
-
-#define QUADTURNOUT_BASEADD 64
-#define TURNOUT_BASEADD 352
-#define SIZE_OF_TURNOUT 8
-
-#define QUADTURNOUT_SENSOR_BASEADD 192
-#define SIZE_OF_QUADTURNOUT_SENSOR 10
-
-#define SENSOR_BASEADD 416
-#define SIZE_OF_SENSOR 8
-
-#define SIGNAL_BASEADD 544
-#define SIZE_OF_SIGNAL 24
-
-#define INDICATOR_BASEADD 928
-#define SIZE_OF_INDICATOR 2
-
 #define TRACKPOWER_BASEADD 960
 
 #define TRACKMAP_BASEADD 1024
@@ -61,7 +38,7 @@
 #endif
 #include <Wire.h>
 #include <PCF8574.h>
-#include <MCP23017.h>
+//#include <MCP23017.h>
 #include <LiquidCrystal_I2C.h>
 
 ///
@@ -94,23 +71,7 @@ String consoleBuffer;
 String commandBuffer;
 
 struct StringObject {
-  char nameLabel[7];
-};
-
-struct SignalObject {
-  byte sensorNumber;
-  byte turnout1Number;
-  byte turnout2Number;
-  char signalHead[7];
-  char leadingSignalHead[7];
-  char remoteSensor[7];
-};
-
-struct QuadSensorObject {
-  byte boardNumber;
-  byte sensorChannel;
-  char sensorName[7];
-  byte sensorNumber;
+  char nameLabel[13];   // specifically for the KEYPAD system
 };
 
 struct TrackMapObject {
@@ -133,10 +94,10 @@ String serial2ReceiveBuffer;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560_keypad v0.6.2a 2023-12-16");
+  Serial.println("CMRS CP_2560_keypad v0.6.3a 2023-12-21");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
-  Ethernet.init(10); // Arduino Ethernet board SS  
+//  Ethernet.init(10); // Arduino Ethernet board SS  
   sdCardManager();
 #endif
   Serial.println("Starting I2C System...");
@@ -248,8 +209,10 @@ void LCDisplay_init() {
 void recover() {
   byte temp;
   EEPROM.get(959,temp);
+#ifdef DBGLVL1
   Serial.print("\nEEPROM returned ");
   Serial.println(temp, DEC);
+#endif
   if ( temp == 0 ) {
     line_for_mainline();
   }
@@ -342,8 +305,10 @@ void line_for_mainline() {
   LCDisplayShowTrack();
   update_scratchpad('0');
   update_scratchpad('0');
+#ifdef DBGLVL1
   Serial.print("Command: ");
   Serial.println(command);
+#endif
   Serial1.write(command,strlen(command));
 }
 
@@ -358,8 +323,10 @@ void line_for_yard(int arg_val) {
     temp = atoi(scratchpad);
   }
   if ( ( temp > MAXYARDTRACKS ) || ( temp == 0 ) ) {
+#ifdef DBGLVL1
     Serial.print("\nError selecting track ");
     Serial.println(scratchpad);
+#endif
     update_scratchpad('0');
     update_scratchpad('0');          
   }
@@ -371,8 +338,10 @@ void line_for_yard(int arg_val) {
     update_scratchpad('0');  
     strcat(command,itoa(temp,ctemp,10));
     strcat(command, " SELECT\n");
+#ifdef DBGLVL1
     Serial.print("Command: ");
     Serial.println(command);
+#endif
     Serial1.write(command,strlen(command));    
   }
 }
@@ -388,7 +357,9 @@ void track_power_on(int arg_val) {
     temp = atoi(scratchpad);
   }
   if ( ( temp > MAXYARDTRACKS ) || ( temp == 0 ) ) {
+#ifdef DBGLVL1
     Serial.print("\nError selecting track ");
+#endif
     update_scratchpad('0');
     update_scratchpad('0');          
   }
@@ -399,8 +370,10 @@ void track_power_on(int arg_val) {
     EEPROM.put(960+temp-1,byte(1)); 
     strcat(command,itoa(temp,ctemp,10));
     strcat(command," ON\n");
+#ifdef DBGLVL1
     Serial.print("Command: ");
     Serial.println(command);
+#endif
     Serial1.write(command,strlen(command));
     Serial2.write(command,strlen(command));
     LCDisplayShowPowerLines();
@@ -418,7 +391,9 @@ void track_power_off(int arg_val) {
     temp = atoi(scratchpad);
   }
   if ( ( temp > MAXYARDTRACKS ) || ( temp == 0 ) ) {
+#ifdef DBGLVL1
     Serial.print("\nError selecting track ");
+#endif
     Serial.println(scratchpad);
     update_scratchpad('0');
     update_scratchpad('0');          
@@ -430,8 +405,10 @@ void track_power_off(int arg_val) {
     EEPROM.put(960+temp-1,byte(0)); 
     strcat(command,itoa(temp,ctemp,10));
     strcat(command," OFF\n");
+#ifdef DBGLVL1
     Serial.print("Command: ");
     Serial.println(command);
+#endif
     Serial1.write(command,strlen(command));
     Serial2.write(command,strlen(command));
     LCDisplayShowPowerLines();
@@ -504,15 +481,12 @@ void processCommandBuffer() {
   if ( commandBuffer.startsWith("KBPOWER") ) {    // KBPOWER nn ON/OFF via Serial
     byte track1 = byte(cmdLabel.toInt());
     if ( command.startsWith("ON") ) {
- //     ThePowerSystem.set(track1,1);
       EEPROM.put(960+track1-1,byte(1));
     } else if ( command.startsWith("OFF") ) {
- //     ThePowerSystem.set(track1,0);
       EEPROM.put(960+track1-1,byte(0));
     }
   } else if ( commandBuffer.startsWith("KBTRACK") ) {  // KBTRACK nn SELECT via Serial
     byte track1 = byte(cmdLabel.toInt());
-//    set_yard_turnouts(track1);
     EEPROM.put(959,byte(track1));
   }
   commandBuffer = "";
@@ -527,7 +501,7 @@ void processCommandBuffer() {
 void eeprom_init() {
   int i;
   byte temp;
-  
+#if 0  
   for ( i = 0 ; i < 8*SIZE_OF_TURNOUT ; i++ ) {
     EEPROM.get(TURNOUT_BASEADD+i,temp);
     if ( temp == 255 ) {
@@ -569,7 +543,7 @@ void eeprom_init() {
       EEPROM.update(INDICATOR_BASEADD+i,byte(0));
     }
   }
-
+#endif
   for ( i = 0 ; i < 16; i++ ) {
     EEPROM.get(TRACKPOWER_BASEADD+i,temp);
     if ( temp == 255 ) {
@@ -716,7 +690,7 @@ void sdCardManager() {
 void show_configuration() {
   int i;
   byte contents;
-
+#if 0
 //
 // EEPROM memory map
 //
@@ -963,6 +937,7 @@ void show_configuration() {
       Serial.print(" - sensor ");
       Serial.println(val2);
   }
+#endif
 //  944   959   RESERVED
 //  960   975   Track Power Saved State
 //  976   1023  RESERVED
@@ -1031,13 +1006,13 @@ void depositData() {
      EEPROM.put(baseAdd,iptemp);    
    }
    else if ( consoleBuffer.startsWith("dep/s") ) {
-     char tempchar[7];
+     char tempchar[13];
      StringObject tempObj;
-     tempstr.toCharArray(tempchar,7);
-     for ( int i = 0; i < 7; i++ ) {
+     tempstr.toCharArray(tempchar,13);
+     for ( int i = 0; i < 13; i++ ) {
        tempObj.nameLabel[i] = tempchar[i];
      }
-     tempObj.nameLabel[7] = '\0';
+     tempObj.nameLabel[12] = '\0';
      EEPROM.put(baseAdd,tempObj);
    }
    else {
