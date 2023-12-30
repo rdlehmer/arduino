@@ -1,5 +1,5 @@
-                                             // Version v0.6.4a
-// Ron Lehmer   2023-12-22
+                                             // Version v0.6.4b
+// Ron Lehmer   2023-12-29
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -94,7 +94,7 @@ String serial2ReceiveBuffer;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560_keypad v0.6.4a 2023-12-22");
+  Serial.println("CMRS CP_2560_keypad v0.6.4b 2023-12-29");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
 //  Ethernet.init(10); // Arduino Ethernet board SS  
@@ -209,6 +209,7 @@ void LCDisplay_init() {
   PanelLCDisplay.setCursor(0,0);
   PanelLCDisplay.printstr(temp);  
   update_scratchpad('0');
+  LCDisplayClearPowerLines();
   LCDisplayShowPowerLines();
 }
 
@@ -382,6 +383,7 @@ void track_power_on(int arg_val) {
 #endif
     Serial1.write(command,strlen(command));
     Serial2.write(command,strlen(command));
+    LCDisplayClearPowerLines();
     LCDisplayShowPowerLines();
   }
 }
@@ -417,6 +419,7 @@ void track_power_off(int arg_val) {
 #endif
     Serial1.write(command,strlen(command));
     Serial2.write(command,strlen(command));
+    LCDisplayClearPowerLines();
     LCDisplayShowPowerLines();
   }
 }
@@ -435,11 +438,8 @@ void LCDisplayShowTrack() {
   }
 }
 
-void LCDisplayShowPowerLines() {
+void LCDisplayClearPowerLines() {
   int i;
-  byte temp;
-  char stemp[3];
-  String s_display = "";
   for ( i = 0 ; i < 20 ; i++ ) {
     PanelLCDisplay.setCursor(i+20,0);
     PanelLCDisplay.write(' ');
@@ -448,6 +448,14 @@ void LCDisplayShowPowerLines() {
     PanelLCDisplay.setCursor(i+20,1);
     PanelLCDisplay.write(' ');
   }
+}
+
+void LCDisplayShowPowerLines() {
+  int i;
+  byte temp;
+  char stemp[3];
+  String s_display = "";
+
   PanelLCDisplay.setCursor(20,0);
   PanelLCDisplay.printstr("Power");
   for ( i = 0; i < MAXYARDTRACKS ; i++ ) {
@@ -491,6 +499,7 @@ void processCommandBuffer() {
     } else if ( command.startsWith("OFF") ) {
       EEPROM.put(960+track1-1,byte(0));
     }
+    LCDisplayShowPowerLines();
   } else if ( commandBuffer.startsWith("KBTRACK") ) {  // KBTRACK nn SELECT via Serial
     byte track1 = byte(cmdLabel.toInt());
     EEPROM.put(959,byte(track1));

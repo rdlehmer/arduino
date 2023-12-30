@@ -1,4 +1,4 @@
-                                             // Version v0.6.2d
+                                             // Version v0.6.2f
 // Ron Lehmer   2023-12-29
 //
 // For the Arduino Uno R3/Mega 2560
@@ -857,7 +857,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.2 2023-12-19");
+  Serial.println("CMRS CP_2560 v0.6.2f 2023-12-29");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -932,22 +932,30 @@ void loop() {
       processCommandBuffer();  // This is where we process incoming messages
     }
   }
+
   if (Serial2.available()) {
-    int c = Serial2.read();
-    if ( c != 10 )
+    int c1 = Serial2.read();
+    if ( c1 != 10 )
+      serial2ReceiveBuffer = String(serial2ReceiveBuffer+String(c1));
+    if ( c1 == 10 ) {      
       commandBuffer = String();
       Serial.print("Serial2 Receive: ");
       Serial.println(serial2ReceiveBuffer.c_str());
-      int j = serial2ReceiveBuffer.length();
-      for ( int k = 0 ; k < j/2 ; k++ ) {
-        char t1 = (char)atoi((serial2ReceiveBuffer.substring(2*k,2*k+2)).c_str());
-        commandBuffer = String(commandBuffer+String(t1));
+      int j1 = serial2ReceiveBuffer.length();
+      for ( int k1 = 0 ; k1 < j1/2 ; k1++ ) {
+        char t11 = (char)atoi((serial2ReceiveBuffer.substring(2*k1,2*k1+2)).c_str());
+        commandBuffer = String(commandBuffer+String(t11));
       }
       Serial.println(commandBuffer);
       serial2ReceiveBuffer = String();
       processCommandBuffer();  // This is where we process incoming messages
+      commandBuffer = commandBuffer+String("\n");
+      Serial.print("Serial1 Send: ");
+      Serial.println(commandBuffer.c_str());
+      Serial1.write(commandBuffer.c_str(),strlen(commandBuffer.c_str()));
     }
   }
+
 #endif
     // if the server's disconnected, stop the client:
   if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
@@ -1972,4 +1980,3 @@ void scan_i2c() {
 // 1232  1247   KBTRACK TRACK 13
 // 1248  1265   KBTRACK TRACK 14
 // 1266  1281   KBTRACK TRACK 15
-
