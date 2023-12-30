@@ -1,6 +1,6 @@
 
-                                             // Version v0.6.2
-// Ron Lehmer   2023-12-19
+                                             // Version v0.6.2c
+// Ron Lehmer   2023-12-29
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -856,7 +856,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.2 2023-12-19");
+  Serial.println("CMRS CP_2560 v0.6.2c 2023-12-29");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -1238,6 +1238,18 @@ void processCommandBuffer() {
 void eeprom_init() {
   int i;
   byte temp;
+
+  EEPROM.get(6,temp);
+  if ( temp == 255 ) {
+    EEPROM.update(6,byte(0));
+  }
+
+  for ( i = 16; i < 40 ; i++ ) {
+    EEPROM.get(i,temp);
+    if ( temp == 255 ) {
+      EEPROM.update(i,byte(0));
+    }
+  }
   
   for ( i = 0 ; i < 8*SIZE_OF_TURNOUT ; i++ ) {
     EEPROM.get(TURNOUT_BASEADD+i,temp);
@@ -1968,4 +1980,3 @@ void scan_i2c() {
 // 1232  1247   KBTRACK TRACK 13
 // 1248  1265   KBTRACK TRACK 14
 // 1266  1281   KBTRACK TRACK 15
-
