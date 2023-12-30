@@ -1,5 +1,5 @@
-                                             // Version v0.6.2
-// Ron Lehmer   2023-12-19
+                                             // Version v0.6.2d
+// Ron Lehmer   2023-12-29
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -822,9 +822,11 @@ class CMRSpower {
         else {
           strcat(command," OFF\n");
         }
-//        Serial.print("Command send: ");
-//        Serial.println(command);
+        Serial.print("Serial1 send: ");
+        Serial.println(command);
         Serial1.write(command,strlen(command));
+        Serial.print("Serial2 send: ");
+        Serial.println(command);
         Serial2.write(command,strlen(command));      
       }
     }
@@ -933,12 +935,15 @@ void loop() {
   if (Serial2.available()) {
     int c = Serial2.read();
     if ( c != 10 )
-      serial2ReceiveBuffer = String(serial2ReceiveBuffer+String(c));
-    if ( c == 10 ) {
       commandBuffer = String();
       Serial.print("Serial2 Receive: ");
-      Serial.println(serial2ReceiveBuffer);
-      commandBuffer = serial2ReceiveBuffer;
+      Serial.println(serial2ReceiveBuffer.c_str());
+      int j = serial2ReceiveBuffer.length();
+      for ( int k = 0 ; k < j/2 ; k++ ) {
+        char t1 = (char)atoi((serial2ReceiveBuffer.substring(2*k,2*k+2)).c_str());
+        commandBuffer = String(commandBuffer+String(t1));
+      }
+      Serial.println(commandBuffer);
       serial2ReceiveBuffer = String();
       processCommandBuffer();  // This is where we process incoming messages
     }
