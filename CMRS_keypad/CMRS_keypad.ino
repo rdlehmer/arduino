@@ -1,5 +1,5 @@
-                                             // Version v0.6.4b
-// Ron Lehmer   2023-12-29
+                                             // Version v0.6.6
+// Ron Lehmer   2023-12-30
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -92,9 +92,10 @@ String serial2ReceiveBuffer;
 ///
 
 void setup() {
+  byte master;
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560_keypad v0.6.4b 2023-12-29");
+  Serial.println("CMRS CP_2560_keypad v0.6.6 2023-12-30");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
 //  Ethernet.init(10); // Arduino Ethernet board SS  
@@ -113,6 +114,15 @@ void setup() {
   PanelLCDisplay.begin(40,2);
   LCDisplay_init();
 
+#ifdef DBGLVL1
+  EEPROM.get(958,master);
+  if ( master == 1 ) {
+    Serial.println(" Master Keypad");
+  }
+  else {
+    Serial.println(" Slave Keypad");
+  }
+#endif
 }
 
 ///
@@ -157,7 +167,10 @@ void loop() {
         char t1 = (char)atoi((serial1ReceiveBuffer.substring(2*k,2*k+2)).c_str());
         commandBuffer = String(commandBuffer+String(t1));
       }
+#ifdef DBGLVL1
+      Serial.print("Receive Serial1: ");
       Serial.println(commandBuffer);
+#endif
       serial1ReceiveBuffer = String();
       processCommandBuffer();  // This is where we process incoming messages
     }
@@ -172,7 +185,10 @@ void loop() {
         char t1 = (char)atoi((serial2ReceiveBuffer.substring(2*k,2*k+2)).c_str());
         commandBuffer = String(commandBuffer+String(t1));
       }
+#ifdef DBGLVL1
+      Serial.print("Receive Serial2: ");
       Serial.println(commandBuffer);
+#endif
       serial2ReceiveBuffer = String();
       processCommandBuffer();  // This is where we process incoming messages
     }
@@ -186,7 +202,15 @@ void loop() {
 
 void sendPing() {
   char command[6] = "PING\n\0";
+#ifdef DBGLVL1
+  Serial.print("Send Serial1: ");
+  Serial.println(command);
+#endif
   Serial1.write(command,strlen(command));
+#ifdef DBGLVL1
+  Serial.print("Send Serial2: ");
+  Serial.println(command);
+#endif
   Serial2.write(command,strlen(command));
 }
 
@@ -313,7 +337,7 @@ void line_for_mainline() {
   update_scratchpad('0');
   update_scratchpad('0');
 #ifdef DBGLVL1
-  Serial.print("Command: ");
+  Serial.print("Send Serial1: ");
   Serial.println(command);
 #endif
   Serial1.write(command,strlen(command));
@@ -346,7 +370,7 @@ void line_for_yard(int arg_val) {
     strcat(command,itoa(temp,ctemp,10));
     strcat(command, " SELECT\n");
 #ifdef DBGLVL1
-    Serial.print("Command: ");
+    Serial.print("Send Serial1: ");
     Serial.println(command);
 #endif
     Serial1.write(command,strlen(command));    
@@ -355,8 +379,12 @@ void line_for_yard(int arg_val) {
 
 void track_power_on(int arg_val) {
   int temp;
+  byte master;
   char command[20] = "KBPOWER ";
   char ctemp[3];
+#ifdef DBGLVL1
+  Serial.println("track_power_on");
+#endif
   if ( arg_val != -1 ) {
     temp = arg_val;
   }
@@ -366,6 +394,7 @@ void track_power_on(int arg_val) {
   if ( ( temp > MAXYARDTRACKS ) || ( temp == 0 ) ) {
 #ifdef DBGLVL1
     Serial.print("\nError selecting track ");
+    Serial.println(scratchpad);
 #endif
     update_scratchpad('0');
     update_scratchpad('0');          
@@ -381,17 +410,40 @@ void track_power_on(int arg_val) {
     Serial.print("Command: ");
     Serial.println(command);
 #endif
-    Serial1.write(command,strlen(command));
-    Serial2.write(command,strlen(command));
-    LCDisplayClearPowerLines();
-    LCDisplayShowPowerLines();
+    EEPROM.get(958,master);
+    if ( master == 1 ) {
+#ifdef DBGLVL1
+      Serial.print("Send Serial1: ");
+      Serial.println(command);
+#endif
+      Serial1.write(command,strlen(command));
+#ifdef DBGLVL1
+      Serial.print("Send Serial2: ");
+      Serial.println(command);
+#endif
+      Serial2.write(command,strlen(command));
+      LCDisplayClearPowerLines();
+      LCDisplayShowPowerLines();
+    }
+    else {
+#ifdef DBGLVL1
+      Serial.print("Send Serial2: ");
+      Serial.println(command);
+#endif
+      Serial2.write(command,strlen(command));
+    } 
   }
 }
 
 void track_power_off(int arg_val) {
   int temp;
+  byte master;
   char command[20] = "KBPOWER ";
   char ctemp[3];
+
+#ifdef DBGLVL1
+  Serial.println("track_power_on");
+#endif
   if ( arg_val != -1 ) {
     temp = arg_val;
   }
@@ -401,8 +453,8 @@ void track_power_off(int arg_val) {
   if ( ( temp > MAXYARDTRACKS ) || ( temp == 0 ) ) {
 #ifdef DBGLVL1
     Serial.print("\nError selecting track ");
-#endif
     Serial.println(scratchpad);
+#endif
     update_scratchpad('0');
     update_scratchpad('0');          
   }
@@ -417,10 +469,28 @@ void track_power_off(int arg_val) {
     Serial.print("Command: ");
     Serial.println(command);
 #endif
-    Serial1.write(command,strlen(command));
-    Serial2.write(command,strlen(command));
-    LCDisplayClearPowerLines();
-    LCDisplayShowPowerLines();
+    EEPROM.get(958,master);
+    if ( master == 1 ) {
+#ifdef DBGLVL1
+      Serial.print("Send Serial1: ");
+      Serial.println(command);
+#endif
+      Serial1.write(command,strlen(command));
+#ifdef DBGLVL1
+      Serial.print("Send Serial2: ");
+      Serial.println(command);
+#endif
+      Serial2.write(command,strlen(command));
+      LCDisplayClearPowerLines();
+      LCDisplayShowPowerLines();
+    }
+    else {
+#ifdef DBGLVL1
+      Serial.print("Send Serial2: ");
+      Serial.println(command);
+#endif
+      Serial2.write(command,strlen(command));
+    }
   }
 }
 
@@ -486,6 +556,7 @@ void processCommandBuffer() {
   int i;
   char tempstr[7];
   String cmdLabel, command, tempStr;
+  byte master;
   
   index1 = commandBuffer.indexOf(" ");
   index2 = commandBuffer.indexOf(" ",index1+1);
@@ -495,14 +566,30 @@ void processCommandBuffer() {
   if ( commandBuffer.startsWith("KBPOWER") ) {    // KBPOWER nn ON/OFF via Serial
     byte track1 = byte(cmdLabel.toInt());
     if ( command.startsWith("ON") ) {
-      EEPROM.put(960+track1-1,byte(1));
+      EEPROM.update(960+track1-1,byte(1));
     } else if ( command.startsWith("OFF") ) {
-      EEPROM.put(960+track1-1,byte(0));
+      EEPROM.update(960+track1-1,byte(0));
     }
+    LCDisplayClearPowerLines();
     LCDisplayShowPowerLines();
+    commandBuffer = commandBuffer + String("\n");
+#ifdef DBGLVL1
+    Serial.print("Send Serial1: ");
+    Serial.println(commandBuffer);
+#endif
+    Serial1.write(commandBuffer.c_str(),strlen(commandBuffer.c_str()));
+    EEPROM.get(958,master);
+    if ( master == 1 ) {
+#ifdef DBGLVL1
+      Serial.print("Send Serial2: ");
+      Serial.println(commandBuffer);
+#endif
+      Serial2.write(commandBuffer.c_str(),strlen(commandBuffer.c_str()));      
+    }
   } else if ( commandBuffer.startsWith("KBTRACK") ) {  // KBTRACK nn SELECT via Serial
-    byte track1 = byte(cmdLabel.toInt());
-    EEPROM.put(959,byte(track1));
+//    byte track1 = byte(cmdLabel.toInt());
+//    EEPROM.put(959,byte(track1));
+// nothing should happen with remote KBTRACK
   }
   commandBuffer = "";
 }
@@ -1228,7 +1315,8 @@ void scan_i2c() {
 //  938   939   Indicator 2/2
 //  940   941   Indicator 2/3
 //  942   943   Indicator 2/4
-//  944   958   RESERVED
+//  944   957   RESERVED
+//  958         Keypad Master (1) or Keypad Slave (0)
 //  959		    Track Selection
 //  960   975   Track Power Saved State
 //  976         Number of Yard Tracks

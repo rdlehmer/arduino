@@ -1,5 +1,5 @@
-                                             // Version v0.6.2f
-// Ron Lehmer   2023-12-29
+                                             // Version v0.6.6
+// Ron Lehmer   2023-12-30
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -16,7 +16,7 @@
 
 #define SD_SYSTEM
 #define NETWORK_SYSTEM
-#define POWER_SYSTEM
+#define KEYPAD_SYSTEM
 #define TURNOUT_SYSTEM
 
 //#define PCF8574_LOW_MEMORY
@@ -77,7 +77,7 @@ MCP23017 turnoutB(37);
 MCP23017 turnoutC(38);
 #endif
 
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
 MCP23017 power(39);
 #endif
 
@@ -126,10 +126,9 @@ String receiveBuffer;
 
 #endif
 
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
 
 String serial1ReceiveBuffer;
-String serial2ReceiveBuffer;
 
 #endif
 
@@ -732,7 +731,7 @@ class CMRSindicators {
 #endif
 
 
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
 ///
 /// Power System
 ///
@@ -800,7 +799,7 @@ class CMRSpower {
       }
     }
     
-    void sendUpdate(byte arg) {
+    void sendUpdate(byte arg) {   // Not used now as of v0.6.6
       byte temp;
      if ( arg == 0 ) {
         char command[20] = "KBTRACK ";
@@ -808,8 +807,6 @@ class CMRSpower {
         EEPROM.get(959,temp);
         strcat(command,itoa(int(temp),ctemp,10));
         strcat(command, " SELECT\n");
-//        Serial.print("Command send: ");
-//        Serial.println(command);
         Serial1.write(command,strlen(command));           
       }
       else if ( arg <= 10 ) {
@@ -825,9 +822,6 @@ class CMRSpower {
         Serial.print("Serial1 send: ");
         Serial.println(command);
         Serial1.write(command,strlen(command));
-        Serial.print("Serial2 send: ");
-        Serial.println(command);
-        Serial2.write(command,strlen(command));      
       }
     }
   private:
@@ -846,7 +840,7 @@ CMRSindicators  TheIndicators;
 CMRSquadSensors TheQuadSensors;
 #endif
 
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
 CMRSpower		ThePowerSystem;
 #endif
 
@@ -857,7 +851,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.2f 2023-12-29");
+  Serial.println("CMRS CP_2560 v0.6.6 2023-12-30");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -876,10 +870,9 @@ void setup() {
   TheIndicators.init();
 #endif
 
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
   ThePowerSystem.init();
   Serial1.begin(9600);
-  Serial2.begin(9600);
 #endif
 }
 
@@ -913,7 +906,7 @@ void loop() {
       processCommandBuffer();  // This is where we process incoming messages
     }
   }
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
   if (Serial1.available()) {
     int c = Serial1.read();
     if ( c != 10 )
@@ -932,30 +925,6 @@ void loop() {
       processCommandBuffer();  // This is where we process incoming messages
     }
   }
-
-  if (Serial2.available()) {
-    int c1 = Serial2.read();
-    if ( c1 != 10 )
-      serial2ReceiveBuffer = String(serial2ReceiveBuffer+String(c1));
-    if ( c1 == 10 ) {      
-      commandBuffer = String();
-      Serial.print("Serial2 Receive: ");
-      Serial.println(serial2ReceiveBuffer.c_str());
-      int j1 = serial2ReceiveBuffer.length();
-      for ( int k1 = 0 ; k1 < j1/2 ; k1++ ) {
-        char t11 = (char)atoi((serial2ReceiveBuffer.substring(2*k1,2*k1+2)).c_str());
-        commandBuffer = String(commandBuffer+String(t11));
-      }
-      Serial.println(commandBuffer);
-      serial2ReceiveBuffer = String();
-      processCommandBuffer();  // This is where we process incoming messages
-      commandBuffer = commandBuffer+String("\n");
-      Serial.print("Serial1 Send: ");
-      Serial.println(commandBuffer.c_str());
-      Serial1.write(commandBuffer.c_str(),strlen(commandBuffer.c_str()));
-    }
-  }
-
 #endif
     // if the server's disconnected, stop the client:
   if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
@@ -997,7 +966,6 @@ void loop() {
     counts++;
     TheTurnouts.sendTurnoutsStatus((counts+40) % 60);
     TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
-    ThePowerSystem.sendUpdate((counts+4) % 60);
   }
 #endif
 }
@@ -1078,7 +1046,7 @@ void setIndicators() {
 }
 #endif
 
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
 
 //
 // set_yard_turnouts
@@ -1222,7 +1190,7 @@ void processCommandBuffer() {
     Serial.println("Connection to JMRI successful.");
   }
 #endif
-#ifdef POWER_SYSTEM
+#ifdef KEYPAD_SYSTEM
   else if ( commandBuffer.startsWith("KBPOWER") ) {    // KBPOWER nn ON/OFF via Serial
     byte track1 = byte(cmdLabel.toInt());
     if ( command.startsWith("ON") ) {
