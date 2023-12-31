@@ -1,6 +1,6 @@
 
-                                             // Version v0.6.6a
-// Ron Lehmer   2023-12-30
+                                             // Version v0.7.0a
+// Ron Lehmer   2023-12-31
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -19,6 +19,7 @@
 #define NETWORK_SYSTEM
 #define KEYPAD_SYSTEM
 #define TURNOUT_SYSTEM
+//#define SIGNAL_SYSTEM
 
 //#define PCF8574_LOW_MEMORY
 
@@ -852,7 +853,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.6a 2023-12-30");
+  Serial.println("CMRS CP_2560 v0.7.0a 2023-12-31");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -1162,7 +1163,7 @@ void processCommandBuffer() {
       }
     }
   } else if ( commandBuffer.startsWith("SENSOR") ) {
-#ifdef SIGNAL_SYSTEM
+#ifdef OLD_SIGNAL_SYSTEM
     for ( i = 0 ; i < N_SIGNALS ; i++ ) {
       EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+17,tempstr);
       tempStr = String(tempstr);
@@ -1176,7 +1177,7 @@ void processCommandBuffer() {
     }
 #endif
   } else if ( commandBuffer.startsWith("SIGNALHEAD") ) {
-#ifdef SIGNAL_SYSTEM
+#ifdef OLD_SIGNAL_SYSTEM
     for ( i = 0 ; i < N_SIGNALS ; i++ ) {
       EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+10,tempstr);
       tempStr = String(tempstr);
