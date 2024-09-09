@@ -1,5 +1,5 @@
 
-                                             // Version v0.6.7a01
+                                             // Version v0.6.7a02
 // Ron Lehmer   2024-05-22
 //
 // For the Arduino Uno R3/Mega 2560
@@ -8,6 +8,7 @@
 //
 //  PCF8574 Library - version 2.3.6 minimum
 //  MCP23017 Library - version 2.0.0 minimum
+//  Watchdog Library - version 3.0.2 minimum
 ///
 /// Global defines
 ///
@@ -856,7 +857,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.7a01 2024-05-22");
+  Serial.println("CMRS CP_2560 v0.6.7a02 2024-09-08");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
