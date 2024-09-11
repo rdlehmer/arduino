@@ -1,6 +1,6 @@
 
-                                             // Version v0.7.0a
-// Ron Lehmer   2023-12-31
+                                             // Version v0.7.0b merge from v0.6.8
+// Ron Lehmer   2024-09-11
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -8,6 +8,7 @@
 //
 //  PCF8574 Library - version 2.3.6 minimum
 //  MCP23017 Library - version 2.0.0 minimum
+//  Watchdog Library - version 3.0.2 minimum
 ///
 /// Global defines
 ///
@@ -65,6 +66,8 @@
 #include <Wire.h>
 #include <PCF8574.h>
 #include <MCP23017.h>
+
+#include <Watchdog.h>
 
 ///
 /// Global variables
@@ -131,6 +134,8 @@ String receiveBuffer;
 #ifdef KEYPAD_SYSTEM
 
 String serial1ReceiveBuffer;
+
+Watchdog watchdog;
 
 #endif
 
@@ -853,7 +858,7 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.7.0a 2023-12-31");
+  Serial.println("CMRS CP_2560 v0.7.0b 2024-09-11");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -876,6 +881,8 @@ void setup() {
   ThePowerSystem.init();
   Serial1.begin(9600);
 #endif
+
+//  watchdog.enable(Watchdog::TIMEOUT_1S);
 }
 
 ///
@@ -895,6 +902,7 @@ void loop() {
     connectServer();
     run_first_time = 0;
     reconnect_timer = 60000;
+    watchdog.enable(Watchdog::TIMEOUT_1S);
   }
   if (client.available()) {
     char c = client.read();
@@ -970,6 +978,7 @@ void loop() {
     TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
   }
 #endif
+  watchdog.reset();
 }
 
 #ifdef TURNOUT_SYSTEM
