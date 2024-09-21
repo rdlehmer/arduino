@@ -1,6 +1,6 @@
  
-                                             // Version v0.7.1
-// Ron Lehmer   2024-09-11
+                                             // Version v0.7.1a
+// Ron Lehmer   2024-09-20
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -133,16 +133,18 @@ struct TrackMapObject {
   byte turnout[16];
 };
 
-static unsigned long prevTime = 0;
-static long counts = 0;
-static unsigned long tempTime = 0;
-static int run_first_time = 1;
+static unsigned long 	ulsPreviousTime = 0;
+static long 			counts = 0;
+static unsigned long 	ulsTempTime = 0;
+static int 				isRunFirstTime = 1;
+static int 				isTheFlasher = 0;
 
 #ifdef NETWORK_SYSTEM
 
-static long reconnect_timer = 0;
-EthernetClient client;
-static byte jmri_running = 0;
+EthernetClient 			TheEthernetClient;
+static long 			lsReconnectionTimer = 0;
+static byte 			bsIsJmriRunning = 0;
+
 String commandBuffer;
 String receiveBuffer;
 
@@ -152,9 +154,10 @@ String receiveBuffer;
 
 String serial1ReceiveBuffer;
 
+#endif
+
 Watchdog watchdog;
 
-#endif
 
 ///
 /// Classes
@@ -355,7 +358,7 @@ class cmrs_turnout {
  #ifdef NETWORK_SYSTEM   
     void sendUpdate() {
       char tempstr[7];
-      if (( client.connected() ) && ( jmri_running == 1 )) {
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
         String tempStr;
         EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*(_channel-1)+1,tempstr);
         tempStr = String(tempstr);
@@ -372,7 +375,7 @@ class cmrs_turnout {
           }
           Serial.print("Send: ");
           Serial.println(tempStr);
-          if (client.connected()) client.println(tempStr);
+          if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
         }
       }
     }
@@ -496,7 +499,7 @@ class CMRSquadSensors {
  #ifdef NETWORK_SYSTEM
     void sendUpdate(byte arg) {
       char tempstr[7];
-      if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
+      if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
         String tempStr;
         byte _bo;
         byte _ch;
@@ -518,7 +521,7 @@ class CMRSquadSensors {
             }
             Serial.print("Send: ");
             Serial.println(tempStr);
-            if (client.connected()) client.println(tempStr);
+            if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
           }
         }
       }   
@@ -920,7 +923,7 @@ class CMRSsensors {
  #ifdef NETWORK_SYSTEM
     void sendUpdate(byte arg) {
       char tempstr[7];
-      if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
+      if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
         String tempStr;
         byte _ch;
         EEPROM.get(SENSOR_BASEADD+SIZE_OF_SENSOR*arg, _ch);
@@ -940,7 +943,7 @@ class CMRSsensors {
             }
             Serial.print("Send: ");
             Serial.println(tempStr);
-            if (client.connected()) client.println(tempStr);
+            if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
           }
         }
       }   
@@ -959,6 +962,14 @@ class CMRSsensors {
     int _boards;
     
 };
+
+///
+/// CMRSsignalInputs - list of inputs for the signal system
+///  init()           - initializes the inputs as 0 
+///  scan()           - not used
+///  set(int,byte)   - set state of i-th sensor with value j
+///  get(int) 		 - get state of i-th sensor
+///
 
 class CMRSsignalInputs {
   public:
@@ -997,6 +1008,147 @@ class CMRSsignalInputs {
 
 };
 
+///
+/// cmrs_signal - signal
+///  init(byte) - sets the channel number
+///  set(byte)  - sets the hardware state of the indicator
+///  get()      - returns the state of the indicator
+///
+
+class cmrs_signal {
+  public:
+    cmrs_signal() {
+      _state = 0;
+    }
+    
+    ~cmrs_signal() {    
+    }
+    
+    void init (byte arg) {
+      _channel = arg;
+    }
+    
+    void set(byte arg) {
+      _state = arg;
+      if ( _channel < 4 ) {
+        switch ( _state ) {
+          case 0 :
+          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel+1, HIGH);
+          		signalA.digitalWrite(3*_channel+2, HIGH);
+          		break;
+          case 1 :
+          		signalA.digitalWrite(3*_channel, LOW);
+          		signalA.digitalWrite(3*_channel+1, HIGH);
+          		signalA.digitalWrite(3*_channel+2, HIGH);
+          		break;
+          case 2 :
+          		signalA.digitalWrite(3*_channel, LOW);
+          		signalA.digitalWrite(3*_channel+1, HIGH);
+          		signalA.digitalWrite(3*_channel+2, HIGH);
+          		break;
+          case 3 :
+          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel+1, LOW);
+          		signalA.digitalWrite(3*_channel+2, HIGH);
+          		break;
+          case 4 :
+          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel+1, HIGH);
+          		signalA.digitalWrite(3*_channel+2, HIGH);
+          		break;          
+          case 5 :
+          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel+1, HIGH);
+          		signalA.digitalWrite(3*_channel+2, LOW);
+          		break;
+          case 6 :
+          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel+1, HIGH);
+          		signalA.digitalWrite(3*_channel+2, HIGH);
+          		break;
+          default :
+          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel+1, HIGH);
+          		signalA.digitalWrite(3*_channel+2, HIGH);
+          		break;
+        }
+        if ( isTheFlasher == 0 ) {
+          signalA.digitalWrite(3*_channel, HIGH);
+          signalA.digitalWrite(3*_channel+1, HIGH);
+          signalA.digitalWrite(3*_channel+2, HIGH);        
+        }
+      }
+      else {
+        switch ( _state ) {
+         case 0 :
+          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		break;
+          case 1 :
+          		signalB.digitalWrite(3*( _channel - 4 ), LOW);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		break;
+          case 2 :
+          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		break;
+          case 3 :
+          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, LOW);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		break;
+          case 4 :
+          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		break;          
+          case 5 :
+          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, LOW);
+          		break;
+          case 6 :
+          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		break;
+          default :
+          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		break;
+        }      
+        if ( isTheFlasher == 0 ) {
+          signalB.digitalWrite(3*_channel, HIGH);
+          signalB.digitalWrite(3*_channel+1, HIGH);
+          signalB.digitalWrite(3*_channel+2, HIGH);        
+        }
+      }
+    }
+    
+    byte get() {
+      return _state;
+    }
+    
+  private:
+    byte _state;
+    byte _channel;
+    
+};
+
+
+///
+/// CMRSsignals - signal interface
+///  init()           - initializes the inputs as 0 
+///  scan()           - not used
+///  set(int,byte)   - set state of i-th signal with value j
+///  get(int) 		 - get state of i-th signal
+///
+
 class CMRSsignals {
   public:
     CMRSsignals() {
@@ -1006,32 +1158,48 @@ class CMRSsignals {
     }
     
     void init() {
+      byte temp;
       int i;
+      EEPROM.get(ADDRESS_NUMBER_SIGNAL_BOARDS, temp);
+      _boards = int(temp);
 #ifdef DBGLVL1
       Serial.print("INIT: Initializing Signals.");
 #endif
-      for ( i = 0 ; i < 32 ; i++ ) {
-        signals[i].set(0);
-        prevSignals[i].set(0);
+      if ( _boards > 0 ) {
+        for ( i = 0; i < 16; i++ ) {
+          signalA.pinMode(i , OUTPUT, HIGH);
+          if ( _boards > 1 ) signalB.pinMode(i, OUTPUT, HIGH);
+        }
+        for ( i = 0; i < 8; i++ ) {
+          signal[i].init(i);
+        }
+//        signalA.begin();
+//        if ( _boards > 1 ) signalB.begin();
       }
     }  
 
-    void scan() {
- 
-    }
-    
     byte get(int arg_i) {
-      return signals[arg_i].get();
+      return signal[arg_i].get();
     }
     
     void set(int arg_i, byte arg_val) {
-      signals[arg_i].set(arg_val);
+      signal[arg_i].set(arg_val);
     }
     
   private:
-    cmrs_toggle signals[32];
-    cmrs_toggle prevSignals[32];
-
+    cmrs_signal signal[16];
+//    cmrs_toggle prevSignals[16];
+    int 		_boards;
+// signal settings
+//  0 - Dark
+//  1 - Green
+//  2 - Flashing Green
+//  3 - Yellow
+//  4 - Flashing Yellow
+//  5 - Red
+//  6 - Flashing Red
+//  7 - Lunar
+//  8 - Flashing Lunar
 };
 
 
@@ -1055,6 +1223,7 @@ CMRSpower		ThePowerSystem;
 #ifdef SIGNAL_SYSTEM
 CMRSsensors		TheSensors;
 CMRSsignalInputs TheSignalInputs;
+CMRSsignals	    TheSignals;
 #endif
 
 
@@ -1065,7 +1234,7 @@ CMRSsignalInputs TheSignalInputs;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.7.1 2024-09-12");
+  Serial.println("CMRS CP_2560 v0.7.1a 2024-09-20");
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -1092,9 +1261,9 @@ void setup() {
 #ifdef SIGNAL_SYSTEM
   TheSensors.init();
   TheSignalInputs.init();
+  TheSignals.init();
 #endif
 
-//  watchdog.enable(Watchdog::TIMEOUT_1S);
 }
 
 ///
@@ -1103,21 +1272,21 @@ void setup() {
 
 void loop() {
   unsigned long currentTime = millis();
-  if ( currentTime < prevTime )
-    prevTime = currentTime; 
-  if ( currentTime < tempTime )
-    tempTime = currentTime;
+  if ( currentTime < ulsPreviousTime )
+    ulsPreviousTime = currentTime; 
+  if ( currentTime < ulsTempTime )
+    ulsTempTime = currentTime;
 
 
 #ifdef NETWORK_SYSTEM
-  if (( run_first_time == 1 ) && ( reconnect_timer == 0 )) {
+  if (( isRunFirstTime == 1 ) && ( lsReconnectionTimer == 0 )) {
     connectServer();
-    run_first_time = 0;
-    reconnect_timer = 60000;
+    isRunFirstTime = 0;
+    lsReconnectionTimer = 60000;
     watchdog.enable(Watchdog::TIMEOUT_1S);
   }
-  if (client.available()) {
-    char c = client.read();
+  if (TheEthernetClient.available()) {
+    char c = TheEthernetClient.read();
     if ( c != 10 )
       receiveBuffer = String(receiveBuffer+String(c));
     if ( c == 10 ) {
@@ -1148,27 +1317,27 @@ void loop() {
     }
   }
 #endif
-    // if the server's disconnected, stop the client:
-  if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
+    // if the server's disconnected, stop the TheEthernetClient:
+  if ( (!TheEthernetClient.connected() ) && ( isRunFirstTime == 0 ) ) {
     Serial.println();
     Serial.println("disconnecting.");
-    client.stop();
+    TheEthernetClient.stop();
     // do nothing:
-    run_first_time = 2;  //waiting for timer
-    jmri_running = 0;
-    reconnect_timer = 60000;
+    isRunFirstTime = 2;  //waiting for timer
+    bsIsJmriRunning = 0;
+    lsReconnectionTimer = 60000;
   }  
 #endif
   
-  if ( currentTime > ( prevTime + TIME_STEP ) ) {
+  if ( currentTime > ( ulsPreviousTime + TIME_STEP ) ) {
   
 #ifdef NETWORK_SYSTEM  
-    if ( ( reconnect_timer > 0 ) && ( run_first_time == 2 ) ) {
-      reconnect_timer = reconnect_timer - TIME_STEP;
+    if ( ( lsReconnectionTimer > 0 ) && ( isRunFirstTime == 2 ) ) {
+      lsReconnectionTimer = lsReconnectionTimer - TIME_STEP;
     }
-    if ( reconnect_timer <= 0 ) {
-      reconnect_timer = 0;
-      run_first_time = 1;
+    if ( lsReconnectionTimer <= 0 ) {
+      lsReconnectionTimer = 0;
+      isRunFirstTime = 1;
     }
 #endif
 
@@ -1185,20 +1354,25 @@ void loop() {
     TheSignalInputs.scan();
 #endif
 
-    prevTime += TIME_STEP;
+    ulsPreviousTime += TIME_STEP;
   }
 
-  if ( currentTime > ( tempTime + 1000 )) {
-    tempTime += 1000;
+  if ( currentTime > ( ulsTempTime + 500 )) {
+    ulsTempTime += 500;
     counts++;
-    
+    if ( isTheFlasher == 0 ) {
+      isTheFlasher = 1;
+    }
+    else {
+      isTheFlasher = 0;
+    }
 #ifdef TURNOUT_SYSTEM
-    TheTurnouts.sendTurnoutsStatus((counts+40) % 60);
-    TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
+    TheTurnouts.sendTurnoutsStatus((counts+80) % 120);
+    TheQuadSensors.sendQuadSensorsStatus((counts+40) % 120);
 #endif
 
 #ifdef SIGNAL_SYSTEM
-    TheSensors.sendSensorsStatus((counts+30) % 60);
+    TheSensors.sendSensorsStatus((counts+60) % 120);
 #endif
 
   }
@@ -1416,7 +1590,7 @@ byte connectServer() {
   Serial.println("connecting...");
 
   // if you get a connection, report back via serial:
-  if (ret_val = client.connect(server, 2048)) {
+  if (ret_val = TheEthernetClient.connect(server, 2048)) {
     Serial.println("connected");
   } else {
     // if you didn't get a connection to the server:
@@ -1489,7 +1663,7 @@ void processCommandBuffer() {
     }  
 #endif  
   } else if ( commandBuffer.startsWith("NODE jmri") ) {
-    jmri_running = 1;
+    bsIsJmriRunning = 1;
     Serial.println("Connection to JMRI successful.");
   }
 #endif
