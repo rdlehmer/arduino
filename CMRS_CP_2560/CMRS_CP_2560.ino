@@ -1,6 +1,7 @@
- 
-                                             // Version v0.7.1b
-// Ron Lehmer   2024-09-20
+
+const char* const SW_VERSION = "2024-09-28 v0.7.1e";
+
+// Ron Lehmer
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -16,6 +17,7 @@
 
 //#define DBGLVL1
 //#define DBGLVL2
+//#define DBGLVLS
 
 #define SD_SYSTEM
 #define NETWORK_SYSTEM
@@ -605,16 +607,6 @@ class CMRSturnouts {
         }
       }
     }
-#if 0
-    void sendTurnoutsStatus() {
-      int i;
-      if ( _boards > 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          turnout[i].sendUpdate();
-        }
-      }
-    }
-#endif
 #endif
 
 #if 0
@@ -990,8 +982,8 @@ class CMRSsignalInputs {
       Serial.print("INIT: Initializing Signal Inputs.");
 #endif
       for ( i = 0 ; i < 32 ; i++ ) {
-        signalInputs[i].set(0);
-        prevInputs[i].set(0);
+        signalInputs[i].set(2);  // unknown
+        prevInputs[i].set(2);  //unknown
       }
     }  
 
@@ -1005,7 +997,40 @@ class CMRSsignalInputs {
     
     void set(int arg_i, byte arg_val) {
       signalInputs[arg_i].set(arg_val);
+#ifdef DBGLVLS
+      Serial.print("SignalInputs ");
+      Serial.print(arg_i);
+      Serial.print(" = ");
+      Serial.println(arg_val);
+#endif
     }
+
+#ifdef NETWORK_SYSTEM
+    void sendSignalInputsStatus(int arg) {
+      if (( arg >= 0 ) && ( arg < 32)) {
+        if ( get(arg) == 2 ) {
+          if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
+            byte temp;
+            EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+1, temp);
+            if ( temp == 7 ) {
+              char tempstr[7];              
+              String tempStr;
+              EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+3, tempstr);
+              tempStr = String(tempstr);
+              if ( tempStr.length() != 0 ) {
+                tempStr = String("SENSOR "+tempStr);
+                tempStr = String(tempStr + " UNKNOWN");
+                Serial.print("Send: ");
+                Serial.println(tempStr);
+                if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+              }
+            }
+          }
+        }
+      }
+    }
+#endif
+
     
   private:
     cmrs_toggle signalInputs[32];
@@ -1031,6 +1056,7 @@ class cmrs_signal {
     
     void init (byte arg) {
       _state = 0;
+      _previousState = 0;
       _leadingState = 0;
       _channel = arg;
     }
@@ -1041,101 +1067,139 @@ class cmrs_signal {
         switch ( _state ) {
           case 0 :
           case 1:
-          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel,   HIGH);
           		signalA.digitalWrite(3*_channel+1, HIGH);
           		signalA.digitalWrite(3*_channel+2, HIGH);
           		break;
           case 2 :
-          		signalA.digitalWrite(3*_channel, LOW);
+          		signalA.digitalWrite(3*_channel,   LOW);
           		signalA.digitalWrite(3*_channel+1, HIGH);
           		signalA.digitalWrite(3*_channel+2, HIGH);
           		break;
           case 3 :
-          		signalA.digitalWrite(3*_channel, LOW);
-          		signalA.digitalWrite(3*_channel+1, HIGH);
-          		signalA.digitalWrite(3*_channel+2, HIGH);
+                if ( isTheFlasher == 0 ) {
+          		  signalA.digitalWrite(3*_channel,   LOW);
+          	  	  signalA.digitalWrite(3*_channel+1, HIGH);
+          		  signalA.digitalWrite(3*_channel+2, HIGH);
+          		}
+          		else {
+                  signalA.digitalWrite(3*_channel,   HIGH);
+                  signalA.digitalWrite(3*_channel+1, HIGH);
+                  signalA.digitalWrite(3*_channel+2, HIGH);              		
+          		}
           		break;
           case 4 :
-          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel,   HIGH);
           		signalA.digitalWrite(3*_channel+1, LOW);
           		signalA.digitalWrite(3*_channel+2, HIGH);
           		break;
           case 5 :
-          		signalA.digitalWrite(3*_channel, HIGH);
-          		signalA.digitalWrite(3*_channel+1, HIGH);
-          		signalA.digitalWrite(3*_channel+2, HIGH);
+                if ( isTheFlasher == 0 ) {
+         		  signalA.digitalWrite(3*_channel,   HIGH);
+          	  	  signalA.digitalWrite(3*_channel+1, LOW);
+          		  signalA.digitalWrite(3*_channel+2, HIGH);
+          		}
+          		else {
+                  signalA.digitalWrite(3*_channel,   HIGH);
+                  signalA.digitalWrite(3*_channel+1, HIGH);
+                  signalA.digitalWrite(3*_channel+2, HIGH);              		
+          		}
           		break;          
           case 6 :
-          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel,   HIGH);
           		signalA.digitalWrite(3*_channel+1, HIGH);
           		signalA.digitalWrite(3*_channel+2, LOW);
           		break;
           case 7 :
-          		signalA.digitalWrite(3*_channel, HIGH);
-          		signalA.digitalWrite(3*_channel+1, HIGH);
-          		signalA.digitalWrite(3*_channel+2, HIGH);
-          		break;
+                if ( isTheFlasher == 0 ) {
+         		  signalA.digitalWrite(3*_channel,   HIGH);
+          	  	  signalA.digitalWrite(3*_channel+1, HIGH);
+          		  signalA.digitalWrite(3*_channel+2, LOW);
+          		}
+          		else {
+                  signalA.digitalWrite(3*_channel,   HIGH);
+                  signalA.digitalWrite(3*_channel+1, HIGH);
+                  signalA.digitalWrite(3*_channel+2, HIGH);              		
+          		}
+           		break;
           default :
-          		signalA.digitalWrite(3*_channel, HIGH);
+          		signalA.digitalWrite(3*_channel,   HIGH);
           		signalA.digitalWrite(3*_channel+1, HIGH);
           		signalA.digitalWrite(3*_channel+2, HIGH);
           		break;
-        }
-        if ( isTheFlasher == 0 ) {
-          signalA.digitalWrite(3*_channel, HIGH);
-          signalA.digitalWrite(3*_channel+1, HIGH);
-          signalA.digitalWrite(3*_channel+2, HIGH);        
         }
       }
       else {
         switch ( _state ) {
           case 0 :
           case 1 :
-          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
           		break;
           case 2 :
-          		signalB.digitalWrite(3*( _channel - 4 ), LOW);
+         		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
           		break;
           case 3 :
-          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+                if ( isTheFlasher == 0 ) {
+          		  signalB.digitalWrite(3*( _channel - 4 ),   LOW);
+          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		}
+          		else {
+           		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);         		
+          		}
           		break;
           case 4 :
-          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+1, LOW);
           		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
           		break;
           case 5 :
-          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
-          		break;          
+                if ( isTheFlasher == 0 ) {
+          		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+1, LOW);
+          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+          		}
+          		else {
+           		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);         		
+          		}
+          		break;
           case 6 :
-          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+2, LOW);
           		break;
           case 7 :
-          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
+               if ( isTheFlasher == 0 ) {
+          		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+2, LOW);
+          		}
+          		else {
+           		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
+          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);         		
+          		}
           		break;
           default :
-          		signalB.digitalWrite(3*( _channel - 4 ), HIGH);
+          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
           		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
           		break;
         }      
-        if ( isTheFlasher == 0 ) {
-          signalB.digitalWrite(3*_channel, HIGH);
-          signalB.digitalWrite(3*_channel+1, HIGH);
-          signalB.digitalWrite(3*_channel+2, HIGH);        
-        }
+      }
+      if ( _state != _previousState ) {
+#ifdef NETWORK_SYSTEM
+        sendUpdate();
+#endif
+        _previousState = _state;
       }
     }
     
@@ -1151,8 +1215,75 @@ class cmrs_signal {
       return _leadingState;
     }
     
+#ifdef NETWORK_SYSTEM   
+    void sendUpdate() {
+      char tempstr[7];
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
+        String tempStr;
+        EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*(_channel)+1,tempstr);
+        tempStr = String(tempstr);
+        if ( tempStr.length() != 0 ) {
+          tempStr = String("SIGNALHEAD "+String(tempstr));
+          switch ( _state ) {
+            case 0 : 
+            default :
+              tempStr = String(tempStr + " UNKNOWN");
+              break;
+            case 1 : 
+              tempStr = String(tempStr + " DARK");
+              break;
+            case 2 : 
+              tempStr = String(tempStr + " GREEN");
+              break;
+            case 3 : 
+              tempStr = String(tempStr + " FLASHGREEN");
+              break;
+            case 4 : 
+              tempStr = String(tempStr + " YELLOW");
+              break;
+            case 5 : 
+              tempStr = String(tempStr + " FLASHYELLOW");
+              break;
+            case 6 : 
+              tempStr = String(tempStr + " RED");
+              break;
+            case 7 : 
+              tempStr = String(tempStr + " FLASHRED");
+              break;
+            case 8 : 
+              tempStr = String(tempStr + " LUNAR");
+              break;
+            case 9 : 
+              tempStr = String(tempStr + " FLASHLUNAR");
+              break;
+          }
+          Serial.print("Send: ");
+          Serial.println(tempStr);
+          if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+        }
+      }
+    }
+    
+    void sendLeadingUpdate() {
+      char tempstr[7];
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
+        String tempStr;
+        EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*(_channel)+8,tempstr);
+        tempStr = String(tempstr);
+        if ( tempStr.length() != 0 ) {
+          tempStr = String("SIGNALHEAD "+String(tempstr));
+          tempStr = String(tempStr + " UNKNOWN");
+          Serial.print("Send: ");
+          Serial.println(tempStr);
+          if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+        }
+      }    
+    }
+#endif
+    
   private:
     byte _state;
+    byte _previousState;
     byte _leadingState;
     byte _channel;
     
@@ -1166,6 +1297,17 @@ class cmrs_signal {
 ///  set(int,byte)   - set state of i-th signal with value j
 ///  get(int) 		 - get state of i-th signal
 ///
+// signal settings
+//  0 - Unknown
+//  1 - Dark
+//  2 - Green
+//  3 - Flashing Green
+//  4 - Yellow
+//  5 - Flashing Yellow
+//  6 - Red
+//  7 - Flashing Red
+//  8 - Lunar
+//  9 - Flashing Lunar
 
 class CMRSsignals {
   public:
@@ -1217,38 +1359,40 @@ class CMRSsignals {
       byte _newState;
       _leadingState = getLeadingState(arg_i);
       switch ( _leadingState ) {
-        case 2 :
-        case 3 :
-        case 4 :
-        case 5 :
-          _newState = 2;
+        case 2 :  // Green
+        case 3 :  // Flashing Green
+        case 4 :  // Yellow
+        case 5 :  // Flashing Yellow
+          _newState = 2;  // set Green
           break;
-        case 6 :
-        case 7 :
-          _newState = 4;
+        case 6 :  // Red
+        case 7 :  // Flashing Red
+          _newState = 4;  // set Yellow
           break;
         default :
-          _newState = 2;
+          _newState = 2;  // other states - set Green for now
           break;         
       }
       set(arg_i, _newState);
     }
     
+#ifdef NETWORK_SYSTEM
+    void sendSignalsStatus(int arg) {
+      if ( _boards > 0 ) {
+        if (( arg >= 0 ) && ( arg < 4*_boards )) {
+          signal[arg].sendUpdate();
+          if ( signal[arg].getLeadingState() == 0 ) {
+            signal[arg].sendLeadingUpdate();
+          }
+        }
+      }
+    }
+#endif
+
   private:
     cmrs_signal signal[16];
-//    cmrs_toggle prevSignals[16];
     int 		_boards;
-// signal settings
-//  0 - Unknown
-//  1 - Dark
-//  2 - Green
-//  3 - Flashing Green
-//  4 - Yellow
-//  5 - Flashing Yellow
-//  6 - Red
-//  7 - Flashing Red
-//  8 - Lunar
-//  9 - Flashing Lunar
+
 };
 
 
@@ -1283,7 +1427,8 @@ CMRSsignals	    TheSignals;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.7.1b 2024-09-23");
+  Serial.print("CMRS CP_2560 ");
+  Serial.println(SW_VERSION);
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -1401,6 +1546,7 @@ void loop() {
     TheSensors.scan();
     setSignalInputs();
     TheSignalInputs.scan();
+    set_signals();
 #endif
 
     ulsPreviousTime += TIME_STEP;
@@ -1421,7 +1567,9 @@ void loop() {
 #endif
 
 #ifdef SIGNAL_SYSTEM
+    TheSignalInputs.sendSignalInputsStatus((counts+10) % 120);
     TheSensors.sendSensorsStatus((counts+60) % 120);
+    TheSignals.sendSignalsStatus((counts+100) % 120);
 #endif
 
   }
@@ -1530,20 +1678,6 @@ void set_yard_turnouts(byte track) {
 }
 
 #endif
-
-
-#if 0
-struct SignalInputObject {
-  byte signalNumber;
-  byte inputMode;
-  byte inputIndex;
-  char inputName[7];
-};
-//                             [ 0 - signal ( 0 is off ) ; 1 - mode ( 0 is off, 1 is local turnout,
-//                                2 is local turnout (reversed), 3 is local sensor, 4 is local
-//                                quad turnout sensor, 5 is remote turnout, 6 is remote turnout (reversed),
-//                                  7 is remote sensor ) ; 2 - local index, [3-9] remote name ]
-#endif    
 
 #ifdef SIGNAL_SYSTEM
 
@@ -1736,30 +1870,33 @@ byte signalAspectToCode(String arg) {
     rtn_val = 1;
   }
   else if ( arg.startsWith("RED") ) {
-    rtn_val = 2;
+    rtn_val = 6;
   }
-  else if ( arg.startsWith("FLASHING RED") ) {
-    rtn_val = 3;
+  else if ( arg.startsWith("FLASHRED") ) {
+    rtn_val = 7;
   }
   else if ( arg.startsWith("YELLOW") ) {
     rtn_val = 4;
   }
-  else if ( arg.startsWith("FLASHING YELLOW") ) {
+  else if ( arg.startsWith("FLASHYELLOW") ) {
     rtn_val = 5;
   }
   else if ( arg.startsWith("GREEN") ) {
-    rtn_val = 6;
+    rtn_val = 2;
   }
-  else if ( arg.startsWith("FLASHING GREEN") ) {
-    rtn_val = 7;
+  else if ( arg.startsWith("FLASHGREEN") ) {
+    rtn_val = 3;
   }
   else if ( arg.startsWith("LUNAR") ) {
     rtn_val = 8;
   }
-  else if ( arg.startsWith("FLASHING LUNAR") ) {
+  else if ( arg.startsWith("FLASHLUNAR") ) {
     rtn_val = 9;
   }
   else if ( arg.startsWith("UNKNOWN") ) {
+    rtn_val = 0;
+  }
+  else {
     rtn_val = 0;
   }
   return rtn_val;
@@ -1780,7 +1917,7 @@ void set_signals() {
       for ( j = 0 ; j < 32 ; j++ ) {
         EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*j,temp2);
         if ( temp2 == _signalNumber ) {
-          if ( TheSignalInputs.get(j) ) {
+          if ( TheSignalInputs.get(j) == 1 ) {
             _occupancy = 1;
           }
         }
@@ -2323,7 +2460,7 @@ void show_configuration() {
       Serial.print(" name ");
       Serial.print(sig.signalHead);
       Serial.print(" leading ");
-      Serial.print(sig.leadingSignalHead);
+      Serial.println(sig.leadingSignalHead);
     }
   }
 }
