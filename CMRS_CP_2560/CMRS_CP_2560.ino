@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-09-28 v0.7.2a";
+const char* const SW_VERSION = "2024-09-29 v0.7.2b";
 
 // Ron Lehmer
 //
@@ -829,6 +829,9 @@ class CMRSpower {
 ///  init()           - initializes boards defined
 ///  scan()           - reads inputs from blocksensor boards and sets individual sensor toggle
 ///  getSensors(byte) - get state of i-th sensor
+///  sendUpdate(byte) - send update message on the i-th sensor
+///  sendSensorsUpdate(inex) - Sends a periodic update for the sensor number (index) - index
+///			   can range from 0 to 119 so input is guarded to only active boards/channels
 ///
 
 class CMRSsensors {
@@ -945,9 +948,6 @@ class CMRSsignalInputs {
     
     void init() {
       int i;
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing Signal Inputs.");
-#endif
       for ( i = 0 ; i < 32 ; i++ ) {
         signalInputs[i].set(2);  // unknown
         prevInputs[i].set(2);  //unknown
@@ -1031,136 +1031,44 @@ class cmrs_signal {
     void set(byte arg) {
       _state = arg;
       if ( _channel < 4 ) {
-        switch ( _state ) {
-          case 0 :
-          case 1:
-          		signalA.digitalWrite(3*_channel,   HIGH);
-          		signalA.digitalWrite(3*_channel+1, HIGH);
-          		signalA.digitalWrite(3*_channel+2, HIGH);
-          		break;
-          case 2 :
-          		signalA.digitalWrite(3*_channel,   LOW);
-          		signalA.digitalWrite(3*_channel+1, HIGH);
-          		signalA.digitalWrite(3*_channel+2, HIGH);
-          		break;
-          case 3 :
-                if ( isTheFlasher == 0 ) {
-          		  signalA.digitalWrite(3*_channel,   LOW);
-          	  	  signalA.digitalWrite(3*_channel+1, HIGH);
-          		  signalA.digitalWrite(3*_channel+2, HIGH);
-          		}
-          		else {
-                  signalA.digitalWrite(3*_channel,   HIGH);
-                  signalA.digitalWrite(3*_channel+1, HIGH);
-                  signalA.digitalWrite(3*_channel+2, HIGH);              		
-          		}
-          		break;
-          case 4 :
-          		signalA.digitalWrite(3*_channel,   HIGH);
-          		signalA.digitalWrite(3*_channel+1, LOW);
-          		signalA.digitalWrite(3*_channel+2, HIGH);
-          		break;
-          case 5 :
-                if ( isTheFlasher == 0 ) {
-         		  signalA.digitalWrite(3*_channel,   HIGH);
-          	  	  signalA.digitalWrite(3*_channel+1, LOW);
-          		  signalA.digitalWrite(3*_channel+2, HIGH);
-          		}
-          		else {
-                  signalA.digitalWrite(3*_channel,   HIGH);
-                  signalA.digitalWrite(3*_channel+1, HIGH);
-                  signalA.digitalWrite(3*_channel+2, HIGH);              		
-          		}
-          		break;          
-          case 6 :
-          		signalA.digitalWrite(3*_channel,   HIGH);
-          		signalA.digitalWrite(3*_channel+1, HIGH);
-          		signalA.digitalWrite(3*_channel+2, LOW);
-          		break;
-          case 7 :
-                if ( isTheFlasher == 0 ) {
-         		  signalA.digitalWrite(3*_channel,   HIGH);
-          	  	  signalA.digitalWrite(3*_channel+1, HIGH);
-          		  signalA.digitalWrite(3*_channel+2, LOW);
-          		}
-          		else {
-                  signalA.digitalWrite(3*_channel,   HIGH);
-                  signalA.digitalWrite(3*_channel+1, HIGH);
-                  signalA.digitalWrite(3*_channel+2, HIGH);              		
-          		}
-           		break;
-          default :
-          		signalA.digitalWrite(3*_channel,   HIGH);
-          		signalA.digitalWrite(3*_channel+1, HIGH);
-          		signalA.digitalWrite(3*_channel+2, HIGH);
-          		break;
+        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {
+          signalA.digitalWrite(3*_channel, LOW);
         }
+        else {
+          signalA.digitalWrite(3*_channel, HIGH);
+        }
+         if ( ( _state == 4 ) || (( _state == 5 ) && ( isTheFlasher == 0 )) ) {
+          signalA.digitalWrite(3*_channel+1, LOW);
+        }
+        else {
+          signalA.digitalWrite(3*_channel+1, HIGH);
+        }
+         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {
+          signalA.digitalWrite(3*_channel+2, LOW);
+        }
+        else {
+          signalA.digitalWrite(3*_channel+2, HIGH);
+        }      
       }
       else {
-        switch ( _state ) {
-          case 0 :
-          case 1 :
-          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
-          		break;
-          case 2 :
-         		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
-          		break;
-          case 3 :
-                if ( isTheFlasher == 0 ) {
-          		  signalB.digitalWrite(3*( _channel - 4 ),   LOW);
-          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
-          		}
-          		else {
-           		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);         		
-          		}
-          		break;
-          case 4 :
-          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, LOW);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
-          		break;
-          case 5 :
-                if ( isTheFlasher == 0 ) {
-          		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+1, LOW);
-          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
-          		}
-          		else {
-           		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);         		
-          		}
-          		break;
-          case 6 :
-          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, LOW);
-          		break;
-          case 7 :
-               if ( isTheFlasher == 0 ) {
-          		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+2, LOW);
-          		}
-          		else {
-           		  signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		  signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);         		
-          		}
-          		break;
-          default :
-          		signalB.digitalWrite(3*( _channel - 4 ),   HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+1, HIGH);
-          		signalB.digitalWrite(3*( _channel - 4 )+2, HIGH);
-          		break;
-        }      
+        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {
+          signalB.digitalWrite(3*(_channel - 4), LOW);
+        }
+        else {
+          signalB.digitalWrite(3*(_channel - 4), HIGH);
+        }
+         if ( ( _state == 4 ) || (( _state == 5 ) && ( isTheFlasher == 0 )) ) {
+          signalB.digitalWrite(3*(_channel - 4)+1, LOW);
+        }
+        else {
+          signalB.digitalWrite(3*(_channel - 4)+1, HIGH);
+        }
+         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {
+          signalB.digitalWrite(3*(_channel - 4)+2, LOW);
+        }
+        else {
+          signalB.digitalWrite(3*(_channel - 4)+2, HIGH);
+        }       
       }
       if ( _state != _previousState ) {
 #ifdef NETWORK_SYSTEM
