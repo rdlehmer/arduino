@@ -438,6 +438,12 @@ class cmrs_turnout {
 
 ///
 /// CMRSquadSensor
+///   init() - This initializes the pins on each turnout board that are connected as inputs
+///   scan() - Reads the hardware and determines if any of the input pins have changes states
+///            If any has changed state, then software state is updated and a JMRI message is sent
+///   sendUpdate(sensor number) - Formats the JMRI message and sends it if the network is available
+///   sendQuadSensorUpdate(index) - Sends a periodic update for the sensor number (index) - index
+///			   can range from 0 to 119 so input is guarded to only active boards/channels
 ///
 
 class CMRSquadSensors {
@@ -453,11 +459,6 @@ class CMRSquadSensors {
       int i;
       EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Quad sensor overlays.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0; i < 8; i++ ) {
           turnoutA.pinMode(i+8, INPUT_PULLUP);
@@ -536,15 +537,8 @@ class CMRSquadSensors {
         sendUpdate(arg);
       }
     }
-#if 0    
-    void sendQuadSensorsStatus() {
-      byte i;
-      for ( i = 0 ; i < 16 ; i++ ) {
-        sendUpdate(i);
-      }
-    }
-#endif
 #endif   
+
   private:
     cmrs_toggle quadSensor[16];
     cmrs_toggle prevquadSensor[16];
@@ -557,8 +551,13 @@ class CMRSquadSensors {
 ///
 /// CMRSturnouts - collection of turnouts
 ///  init() - initialize turnout boards and channels
-///  getControl(byte) - returns the toggle channel for i-th turnout
-///  setControl(byte,byte) - sends the state (j) for the i-th turnout
+///  getControl(i) - returns the toggle channel for i-th turnout
+///  setControl(i,j) - sends the state (j) for the i-th turnout
+///  setRemote(i,j) - if a remote turnout command is received, set the hardware and then check
+///  				  if a second (slaved) turnout needs to be thrown as well
+///  sendTurnoutsStatus(index) - Sends a periodic update for the turnout number (index) - index
+///			   can range from 0 to 119 so input is guarded to only active boards/channels
+///  setSlavedControl(i,j) - find the i-th controlled switch and set it to state j
 ///
 
 class CMRSturnouts {
@@ -574,11 +573,6 @@ class CMRSturnouts {
       int i;
       EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Turnout boards.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0 ; i < 4*_boards ; i++ ) {
           turnout[i].init(i, EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i));
@@ -604,22 +598,6 @@ class CMRSturnouts {
       if ( _boards > 0 ) {
         if (( arg >= 0 ) && ( arg < 4*_boards )) {
           turnout[arg].sendUpdate();
-        }
-      }
-    }
-#endif
-
-#if 0
-    void show() {
-      int i;
-      if ( _boards > 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          Serial.print("show: i = ");
-          Serial.print(i);
-          byte temp;
-          temp = turnout[i].getControl();
-          Serial.print(" control ");
-          Serial.println(temp);                                                                                                                                                                        
         }
       }
     }
@@ -725,11 +703,6 @@ class CMRSindicators {
       int i;
       EEPROM.get(ADDRESS_NUMBER_INDICATOR_BOARDS, temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Indicator boards.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0; i < 8; i++ ) {
           indicators[i].init(i);
@@ -757,7 +730,11 @@ class CMRSindicators {
 #ifdef KEYPAD_SYSTEM
 
 ///
-/// Power System
+/// Power System - Controls the 16 relay outputs to control yard track power
+///   Outputs are pulled low to trigger the relay but MUST be set at high impedance to shut them off.
+///   init() - sets up every pin as an output or input to drive the optoisolator inputs
+///   set(i,j) - set the i-th relay; j == 1 turns them on
+///   sendUpdate(i) - not used...
 ///
 
 class CMRSpower {
@@ -784,21 +761,9 @@ class CMRSpower {
         }
         if ( temp == 1 ) {
           power.pinMode(pin, OUTPUT, LOW );
-#ifdef DBGLVL2
-          Serial.print("CMRSpower init(): ");
-          Serial.print(pin);
-          Serial.print(temp);
-          Serial.println(" LOW");
-#endif
         }
         else {
-          power.pinMode(pin, INPUT_PULLUP );
-#ifdef DBGLVL2
-          Serial.print("CMRSpower init(): ");
-          Serial.print(pin);
-          Serial.print(temp);
-          Serial.println(" HIGH");
-#endif        
+          power.pinMode(pin, INPUT_PULLUP );  
         }
       }
     }
@@ -822,7 +787,8 @@ class CMRSpower {
         power_status[arg-1].set(0);
       }
     }
-    
+
+#if 0    
     void sendUpdate(byte arg) {   // Not used now as of v0.6.6
       byte temp;
      if ( arg == 0 ) {
@@ -848,6 +814,7 @@ class CMRSpower {
         Serial1.write(command,strlen(command));
       }
     }
+#endif
   private:
     cmrs_toggle power_status[16];
 };
