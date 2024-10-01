@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-09-29 v0.7.2b";
+const char* const SW_VERSION = "2024-09-29 v0.7.2c";
 
 // Ron Lehmer
 //
@@ -1233,6 +1233,7 @@ class CMRSsignals {
       byte _leadingState;
       byte _newState;
       _leadingState = getLeadingState(arg_i);
+ #if 0
       switch ( _leadingState ) {
         case 2 :  // Green
         case 3 :  // Flashing Green
@@ -1247,6 +1248,13 @@ class CMRSsignals {
         default :
           _newState = 2;  // other states - set Green for now
           break;         
+      }
+#endif
+      if ( _leadingState < 6 ) {
+        _newState = 2;
+      }
+      else if ( _leadingState < 8 ) {
+        _newState = 4;
       }
       set(arg_i, _newState);
     }
@@ -1571,7 +1579,7 @@ void setSignalInputs() {
       switch ( temp[1] ) {
         case 1 :	
                 EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[2]-1, _state);
-                TheSignalInputs.set(temp[0], _state);
+//                TheSignalInputs.set(temp[0], _state);
         		break;
         case 2 :
                 EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[2]-1, _state);
@@ -1581,17 +1589,18 @@ void setSignalInputs() {
                 else {
                   _state = 1;
                 }
-                TheSignalInputs.set(temp[0], _state);                
+//                TheSignalInputs.set(temp[0], _state);                
         		break;
         case 3 :
         		_state = TheSensors.getSensor(temp[2]-1);
-        		TheSignalInputs.set(temp[0], _state);
+//        		TheSignalInputs.set(temp[0], _state);
         		break;
         case 4 :
         		_state = TheQuadSensors.getQuadSensor(temp[2]-1);
-        		TheSignalInputs.set(temp[0], _state);
+//        		TheSignalInputs.set(temp[0], _state);
         		break;
       }
+      TheSignalInputs.set(temp[0], _state);
     }
   }
 }
