@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-09-29 v0.7.2c";
+const char* const SW_VERSION = "2024-09-29 v0.7.2d";
 
 // Ron Lehmer
 //
@@ -220,11 +220,6 @@ class CMRStoggles {
       int i;
       EEPROM.get(ADDRESS_NUMBER_TOGGLE_BOARDS,temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Toggle boards.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0; i < 8; i++ ) {
           toggle1.pinMode(i, INPUT_PULLUP);
@@ -293,14 +288,6 @@ class cmrs_turnout {
       _control_channel = j;
       _channel = i+1;
       EEPROM.get(QUADTURNOUT_STATE_BASEADD+i,temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Turnout ");
-      Serial.print(i);
-      Serial.print(" Toggle ");
-      Serial.print(j);
-      Serial.print(" Initial State ");
-      Serial.println(temp);
-#endif
       if (temp == 1) {
         if ( i < 4 ) {
           turnoutA.pinMode(2*i, OUTPUT, LOW);
@@ -403,10 +390,6 @@ class cmrs_turnout {
         turnoutC.digitalWrite(2*(_chn-8)+1, HIGH);
       }
       EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
-#ifdef DBGLVL2
-      Serial.print("throw: channel ");
-      Serial.println(_channel);
-#endif
     }
 
     void turnout_close() {
@@ -425,10 +408,6 @@ class cmrs_turnout {
         turnoutC.digitalWrite(2*(_chn-8)+1, LOW);
       }
       EEPROM.update(QUADTURNOUT_STATE_BASEADD+_chn,_state);
-#ifdef DBGLVL2
-      Serial.print("close: channel ");
-      Serial.println(_channel);
-#endif
     }
   
     byte _state;
@@ -847,11 +826,6 @@ class CMRSsensors {
       int i;
       EEPROM.get(ADDRESS_NUMBER_SENSOR_BOARDS,temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Sensor boards.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0; i < 8; i++ ) {
           blocksensor1.pinMode(i, INPUT_PULLUP);
@@ -979,7 +953,7 @@ class CMRSsignalInputs {
           if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
             byte temp;
             EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+1, temp);
-            if ( temp == 7 ) {
+            if (( temp == 7 ) || ( temp == 8 )) {
               char tempstr[7];              
               String tempStr;
               EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+3, tempstr);
@@ -1197,9 +1171,6 @@ class CMRSsignals {
       int i;
       EEPROM.get(ADDRESS_NUMBER_SIGNAL_BOARDS, temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing Signals.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0; i < 16; i++ ) {
           signalA.pinMode(i , OUTPUT, HIGH);
@@ -1476,25 +1447,12 @@ void setTurnouts() {
   EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
   for ( i = 0 ; i < 4*temp ; i++ ) {
     byte _control, _state;
-//    _control = TheTurnouts.getControl(i);
     _control = EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i);
 
     if ( _control > 0 ) {
-#ifdef DBGLVL2
-      Serial.print("Turnout ");
-      Serial.print(i);
-      Serial.print(" Control ");
-      Serial.println(_control);
-#endif
       _state = TheToggles.getToggle(_control-1);
       if ( _state != 0 ) {
         TheTurnouts.setControl(i, _state);
-#ifdef DBGLVL2
-        Serial.print("Turnout ");
-        Serial.print(i);
-        Serial.print(" state ");
-        Serial.println(_state);
-#endif
       }
     }
   } 
@@ -1517,12 +1475,6 @@ void setIndicators() {
     if ( _control[0] != 0 ) {
       EEPROM.get(QUADTURNOUT_STATE_BASEADD+_control[0]-1,temp);
       TheIndicators.set(i,temp+1);
-#ifdef DBGLVL2
-      Serial.print("Indicator: set channel ");
-      Serial.print(i);
-      Serial.print(" val ");
-      Serial.println(temp+1);
-#endif
     }
     else if ( _control[1] != 0 ) {
 //    TBD - sensors
@@ -1575,7 +1527,7 @@ void setSignalInputs() {
   byte _state;
   for ( i = 0 ; i < 32 ; i++ ) {
     EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*i, temp);
-    if (( temp[0] != 0 ) && ( temp[1] != 0 )) {
+    if (( temp[0] != 0 ) && ( temp[1] < 5 )) {  //don't process inputs that are controlled by the network
       switch ( temp[1] ) {
         case 1 :	
                 EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[2]-1, _state);
@@ -1634,11 +1586,6 @@ byte connectServer() {
 
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     Serial.println("Ethernet Hardware Error");
-#if 0
-    while (true) {
-      delay(1); // do nothing, no point running without Ethernet hardware
-    }
-#endif
   }
   while (Ethernet.linkStatus() == LinkOFF) {
     Serial.println("Ethernet cable is not connected.");
@@ -1681,16 +1628,8 @@ void processCommandBuffer() {
       tempStr.trim();
       if ( tempStr == cmdLabel ) {
         if ( command.startsWith("CLOSED") ) {
-#ifdef DBGLVL2
-          Serial.print("CommandBuffer: setRemote CLOSED ");
-          Serial.println(i);
-#endif
           TheTurnouts.setRemote(i,2);
         } else if ( command.startsWith("THROWN") ) {
-#ifdef DBGLVL2
-          Serial.print("CommandBuffer: setRemote THROWN ");
-          Serial.println(i);
-#endif
           TheTurnouts.setRemote(i,1);
         }          
       }
@@ -1700,13 +1639,13 @@ void processCommandBuffer() {
     SignalInputObject siobj;
     for ( i = 0 ; i < 32 ; i++ ) {
       EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*i,siobj);
-      if (( siobj.signalNumber != 0 ) && ( siobj.inputMode == 7 )) {
+      if (( siobj.signalNumber != 0 ) && (( siobj.inputMode == 7 ) || ( siobj.inputMode == 8 ))) {
         tempStr = String(siobj.inputName);
         if ( tempStr == cmdLabel ) {
           if ( command.startsWith("ACTIVE") ) {
-            TheSignalInputs.set(i, 1);
+            TheSignalInputs.set(i, 8 - siobj.inputMode);  // 1 if mode 7 or 0 if mode 8
           } else if ( command.startsWith("INACTIVE") ) {
-            TheSignalInputs.set(i, 0);
+            TheSignalInputs.set(i, siobj.inputMode - 7);  // 0 if mode 7 or 1 if mode 8
           }
         }
       }
@@ -1777,9 +1716,11 @@ byte signalAspectToCode(String arg) {
   else if ( arg.startsWith("FLASHLUNAR") ) {
     rtn_val = 9;
   }
+#if 0
   else if ( arg.startsWith("UNKNOWN") ) {
     rtn_val = 0;
   }
+#endif
   else {
     rtn_val = 0;
   }
@@ -2598,9 +2539,9 @@ void scan_i2c() {
 //  544   553	Signal Input 1 [ 0 - signal ( 0 is off ) ; 1 - mode ( 0 is off, 1 is local turnout,
 //                                2 is local turnout (reversed), 3 is local sensor, 4 is local
 //                                quad turnout sensor, 5 is remote turnout, 6 is remote turnout (reversed),
-//                                  7 is remote sensor ) ; 2 - local index, [3-9] remote name ]
+//                                  7 is remote sensor, 8 is invert remote sensor ) ; 2 - local index, [3-9] remote name ]
 //  554   563   Signal Input 2
-//  564	  573	Signal Input 3
+//  564	  573	  Signal Input 3
 //  574   583   Signal Input 4
 //  584   593   Signal Input 5
 //  594   603   Signal Input 6
