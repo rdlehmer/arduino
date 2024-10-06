@@ -1,6 +1,7 @@
 
-                                             // Version v0.6.8
-// Ron Lehmer   2024-09-11
+const char* const SW_VERSION = "2024-09-29 v0.7.2c";
+
+// Ron Lehmer
 //
 // For the Arduino Uno R3/Mega 2560
 //
@@ -9,23 +10,28 @@
 //  PCF8574 Library - version 2.3.6 minimum
 //  MCP23017 Library - version 2.0.0 minimum
 //  Watchdog Library - version 3.0.2 minimum
+
 ///
 /// Global defines
 ///
 
 //#define DBGLVL1
 //#define DBGLVL2
+//#define DBGLVLS
 
 #define SD_SYSTEM
 #define NETWORK_SYSTEM
 #define KEYPAD_SYSTEM
 #define TURNOUT_SYSTEM
+#define SIGNAL_SYSTEM
 
 //#define PCF8574_LOW_MEMORY
 
 #define ADDRESS_NUMBER_TOGGLE_BOARDS 16
+#define ADDRESS_NUMBER_SENSOR_BOARDS 17
 #define ADDRESS_NUMBER_QUADTURNOUT_BOARDS 18
 #define ADDRESS_NUMBER_INDICATOR_BOARDS 19
+#define ADDRESS_NUMBER_SIGNAL_BOARDS 20
 
 #define QUADTURNOUT_STATE_BASEADD 40
 #define TURNOUT_STATE_BASEADD 56
@@ -40,8 +46,11 @@
 #define SENSOR_BASEADD 416
 #define SIZE_OF_SENSOR 8
 
-#define SIGNAL_BASEADD 544
-#define SIZE_OF_SIGNAL 24
+#define SIGNAL_INPUT_BASEADD 544
+#define SIZE_OF_SIGNAL_INPUT 10
+
+#define SIGNAL_BASEADD 1300
+#define SIZE_OF_SIGNAL 15
 
 #define INDICATOR_BASEADD 928
 #define SIZE_OF_INDICATOR 2
@@ -81,6 +90,14 @@ MCP23017 turnoutB(37);
 MCP23017 turnoutC(38);
 #endif
 
+#ifdef SIGNAL_SYSTEM
+PCF8574 blocksensor1(34);
+PCF8574 blocksensor2(35);
+
+MCP23017 signalA(38);
+MCP23017 signalB(39);
+#endif
+
 #ifdef KEYPAD_SYSTEM
 MCP23017 power(39);
 #endif
@@ -96,12 +113,16 @@ struct StringObject {
 };
 
 struct SignalObject {
-  byte sensorNumber;
-  byte turnout1Number;
-  byte turnout2Number;
+  byte signalNumber;
   char signalHead[7];
   char leadingSignalHead[7];
-  char remoteSensor[7];
+};
+
+struct SignalInputObject {
+  byte signalNumber;
+  byte inputMode;
+  byte inputIndex;
+  char inputName[7];
 };
 
 struct QuadSensorObject {
@@ -115,16 +136,18 @@ struct TrackMapObject {
   byte turnout[16];
 };
 
-static unsigned long prevTime = 0;
-static long counts = 0;
-static unsigned long tempTime = 0;
-static int run_first_time = 1;
+static unsigned long 	ulsPreviousTime = 0;
+static long 			counts = 0;
+static unsigned long 	ulsTempTime = 0;
+static int 				isRunFirstTime = 1;
+static int 				isTheFlasher = 0;
 
 #ifdef NETWORK_SYSTEM
 
-static long reconnect_timer = 0;
-EthernetClient client;
-static byte jmri_running = 0;
+EthernetClient 			TheEthernetClient;
+static long 			lsReconnectionTimer = 0;
+static byte 			bsIsJmriRunning = 0;
+
 String commandBuffer;
 String receiveBuffer;
 
@@ -134,14 +157,17 @@ String receiveBuffer;
 
 String serial1ReceiveBuffer;
 
+#endif
+
 Watchdog watchdog;
 
-#endif
 
 ///
 /// Classes
 ///
+
 #ifdef TURNOUT_SYSTEM
+
 ///
 /// cmrs_toggle - instantiate a toggle switch 
 ///  _state - last observed state
@@ -337,7 +363,7 @@ class cmrs_turnout {
  #ifdef NETWORK_SYSTEM   
     void sendUpdate() {
       char tempstr[7];
-      if (( client.connected() ) && ( jmri_running == 1 )) {
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
         String tempStr;
         EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*(_channel-1)+1,tempstr);
         tempStr = String(tempstr);
@@ -354,7 +380,7 @@ class cmrs_turnout {
           }
           Serial.print("Send: ");
           Serial.println(tempStr);
-          if (client.connected()) client.println(tempStr);
+          if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
         }
       }
     }
@@ -412,6 +438,12 @@ class cmrs_turnout {
 
 ///
 /// CMRSquadSensor
+///   init() - This initializes the pins on each turnout board that are connected as inputs
+///   scan() - Reads the hardware and determines if any of the input pins have changes states
+///            If any has changed state, then software state is updated and a JMRI message is sent
+///   sendUpdate(sensor number) - Formats the JMRI message and sends it if the network is available
+///   sendQuadSensorUpdate(index) - Sends a periodic update for the sensor number (index) - index
+///			   can range from 0 to 119 so input is guarded to only active boards/channels
 ///
 
 class CMRSquadSensors {
@@ -427,11 +459,6 @@ class CMRSquadSensors {
       int i;
       EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Quad sensor overlays.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0; i < 8; i++ ) {
           turnoutA.pinMode(i+8, INPUT_PULLUP);
@@ -478,7 +505,7 @@ class CMRSquadSensors {
  #ifdef NETWORK_SYSTEM
     void sendUpdate(byte arg) {
       char tempstr[7];
-      if ( ( client.connected() ) && ( jmri_running == 1 ) ) {
+      if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
         String tempStr;
         byte _bo;
         byte _ch;
@@ -500,7 +527,7 @@ class CMRSquadSensors {
             }
             Serial.print("Send: ");
             Serial.println(tempStr);
-            if (client.connected()) client.println(tempStr);
+            if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
           }
         }
       }   
@@ -510,15 +537,8 @@ class CMRSquadSensors {
         sendUpdate(arg);
       }
     }
-#if 0    
-    void sendQuadSensorsStatus() {
-      byte i;
-      for ( i = 0 ; i < 16 ; i++ ) {
-        sendUpdate(i);
-      }
-    }
-#endif
 #endif   
+
   private:
     cmrs_toggle quadSensor[16];
     cmrs_toggle prevquadSensor[16];
@@ -531,8 +551,13 @@ class CMRSquadSensors {
 ///
 /// CMRSturnouts - collection of turnouts
 ///  init() - initialize turnout boards and channels
-///  getControl(byte) - returns the toggle channel for i-th turnout
-///  setControl(byte,byte) - sends the state (j) for the i-th turnout
+///  getControl(i) - returns the toggle channel for i-th turnout
+///  setControl(i,j) - sends the state (j) for the i-th turnout
+///  setRemote(i,j) - if a remote turnout command is received, set the hardware and then check
+///  				  if a second (slaved) turnout needs to be thrown as well
+///  sendTurnoutsStatus(index) - Sends a periodic update for the turnout number (index) - index
+///			   can range from 0 to 119 so input is guarded to only active boards/channels
+///  setSlavedControl(i,j) - find the i-th controlled switch and set it to state j
 ///
 
 class CMRSturnouts {
@@ -548,11 +573,6 @@ class CMRSturnouts {
       int i;
       EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Turnout boards.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0 ; i < 4*_boards ; i++ ) {
           turnout[i].init(i, EEPROM.read(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i));
@@ -578,32 +598,6 @@ class CMRSturnouts {
       if ( _boards > 0 ) {
         if (( arg >= 0 ) && ( arg < 4*_boards )) {
           turnout[arg].sendUpdate();
-        }
-      }
-    }
-#if 0
-    void sendTurnoutsStatus() {
-      int i;
-      if ( _boards > 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          turnout[i].sendUpdate();
-        }
-      }
-    }
-#endif
-#endif
-
-#if 0
-    void show() {
-      int i;
-      if ( _boards > 0 ) {
-        for ( i = 0 ; i < 4*_boards ; i++ ) {
-          Serial.print("show: i = ");
-          Serial.print(i);
-          byte temp;
-          temp = turnout[i].getControl();
-          Serial.print(" control ");
-          Serial.println(temp);                                                                                                                                                                        
         }
       }
     }
@@ -709,11 +703,6 @@ class CMRSindicators {
       int i;
       EEPROM.get(ADDRESS_NUMBER_INDICATOR_BOARDS, temp);
       _boards = int(temp);
-#ifdef DBGLVL1
-      Serial.print("INIT: Initializing ");
-      Serial.print(_boards);
-      Serial.println(" Indicator boards.");
-#endif
       if ( _boards > 0 ) {
         for ( i = 0; i < 8; i++ ) {
           indicators[i].init(i);
@@ -734,12 +723,18 @@ class CMRSindicators {
     cmrs_indicator indicators[8];
     
 };
+
 #endif
 
 
 #ifdef KEYPAD_SYSTEM
+
 ///
-/// Power System
+/// Power System - Controls the 16 relay outputs to control yard track power
+///   Outputs are pulled low to trigger the relay but MUST be set at high impedance to shut them off.
+///   init() - sets up every pin as an output or input to drive the optoisolator inputs
+///   set(i,j) - set the i-th relay; j == 1 turns them on
+///   sendUpdate(i) - not used...
 ///
 
 class CMRSpower {
@@ -766,21 +761,9 @@ class CMRSpower {
         }
         if ( temp == 1 ) {
           power.pinMode(pin, OUTPUT, LOW );
-#ifdef DBGLVL2
-          Serial.print("CMRSpower init(): ");
-          Serial.print(pin);
-          Serial.print(temp);
-          Serial.println(" LOW");
-#endif
         }
         else {
-          power.pinMode(pin, INPUT_PULLUP );
-#ifdef DBGLVL2
-          Serial.print("CMRSpower init(): ");
-          Serial.print(pin);
-          Serial.print(temp);
-          Serial.println(" HIGH");
-#endif        
+          power.pinMode(pin, INPUT_PULLUP );  
         }
       }
     }
@@ -804,7 +787,8 @@ class CMRSpower {
         power_status[arg-1].set(0);
       }
     }
-    
+
+#if 0    
     void sendUpdate(byte arg) {   // Not used now as of v0.6.6
       byte temp;
      if ( arg == 0 ) {
@@ -830,11 +814,473 @@ class CMRSpower {
         Serial1.write(command,strlen(command));
       }
     }
+#endif
   private:
     cmrs_toggle power_status[16];
 };
 
 #endif
+
+
+#ifdef SIGNAL_SYSTEM
+
+///
+/// CMRSsensors - collection of toggle switches
+///  init()           - initializes boards defined
+///  scan()           - reads inputs from blocksensor boards and sets individual sensor toggle
+///  getSensors(byte) - get state of i-th sensor
+///  sendUpdate(byte) - send update message on the i-th sensor
+///  sendSensorsUpdate(inex) - Sends a periodic update for the sensor number (index) - index
+///			   can range from 0 to 119 so input is guarded to only active boards/channels
+///
+
+class CMRSsensors {
+  public:
+    CMRSsensors() {
+    }
+    
+    ~CMRSsensors() {
+    }
+    
+    void init() {
+      byte temp;
+      int i;
+      EEPROM.get(ADDRESS_NUMBER_SENSOR_BOARDS,temp);
+      _boards = int(temp);
+#ifdef DBGLVL1
+      Serial.print("INIT: Initializing ");
+      Serial.print(_boards);
+      Serial.println(" Sensor boards.");
+#endif
+      if ( _boards > 0 ) {
+        for ( i = 0; i < 8; i++ ) {
+          blocksensor1.pinMode(i, INPUT_PULLUP);
+          if ( _boards > 1 ) blocksensor2.pinMode(i, INPUT_PULLUP);
+        }
+        blocksensor1.begin();
+        if ( _boards > 1 ) blocksensor2.begin();
+      }
+    }
+    
+    void scan() {
+      int i;
+      byte temp;
+      for ( i = 0 ; i < 4*_boards ; i++ ) {
+        if ( i < 4 ) {
+          temp = blocksensor1.digitalRead(i);
+        } else if ( i < 8 ) {
+          temp = blocksensor2.digitalRead(i-4);
+        }
+        if ( temp == LOW ) {
+          blockSensors[i].set(1);
+        } else {
+          blockSensors[i].set(0);
+        }
+        if ( prevSensors[i].get() != blockSensors[i].get() ) {
+          sendUpdate(i);
+        }
+        prevSensors[i].set(blockSensors[i].get());
+      }
+    }
+    
+    int getSensor(int arg) {
+      return blockSensors[arg].get();
+    }
+ 
+ #ifdef NETWORK_SYSTEM
+    void sendUpdate(byte arg) {
+      char tempstr[7];
+      if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
+        String tempStr;
+        byte _ch;
+        EEPROM.get(SENSOR_BASEADD+SIZE_OF_SENSOR*arg, _ch);
+        if ( _ch != 0 ) {
+          EEPROM.get(SENSOR_BASEADD+SIZE_OF_SENSOR*arg+1,tempstr);
+          tempStr = String(tempstr);
+          if ( tempStr.length() != 0 ) {
+            tempStr = String("SENSOR "+tempStr);
+            if ( blockSensors[arg].get() == 0 ) {
+              tempStr = String(tempStr+" INACTIVE");
+            }
+            else if ( blockSensors[arg].get() == 1 ) {
+              tempStr = String(tempStr+" ACTIVE");
+            }
+            else {
+              tempStr = String(tempStr+" UNKNOWN");
+            }
+            Serial.print("Send: ");
+            Serial.println(tempStr);
+            if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+          }
+        }
+      }   
+    }
+    
+    void sendSensorsStatus(int arg) {
+      if ( ( arg >= 0 ) && ( arg < 8 ) ) {
+        sendUpdate(arg);
+      }
+    }
+#endif   
+   
+  private:
+    cmrs_toggle blockSensors[8];
+    cmrs_toggle prevSensors[8];
+    int _boards;
+    
+};
+
+///
+/// CMRSsignalInputs - list of inputs for the signal system
+///  init()           - initializes the inputs as 0 
+///  scan()           - not used
+///  set(int,byte)   - set state of i-th sensor with value j
+///  get(int) 		 - get state of i-th sensor
+///
+
+class CMRSsignalInputs {
+  public:
+    CMRSsignalInputs() {
+    }
+    
+    ~CMRSsignalInputs() {
+    }
+    
+    void init() {
+      int i;
+      for ( i = 0 ; i < 32 ; i++ ) {
+        signalInputs[i].set(2);  // unknown
+        prevInputs[i].set(2);  //unknown
+      }
+    }  
+
+    void scan() {
+ 
+    }
+    
+    byte get(int arg_i) {
+      return signalInputs[arg_i].get();
+    }
+    
+    void set(int arg_i, byte arg_val) {
+      signalInputs[arg_i].set(arg_val);
+#ifdef DBGLVLS
+      Serial.print("SignalInputs ");
+      Serial.print(arg_i);
+      Serial.print(" = ");
+      Serial.println(arg_val);
+#endif
+    }
+
+#ifdef NETWORK_SYSTEM
+    void sendSignalInputsStatus(int arg) {
+      if (( arg >= 0 ) && ( arg < 32)) {
+        if ( get(arg) == 2 ) {
+          if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
+            byte temp;
+            EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+1, temp);
+            if ( temp == 7 ) {
+              char tempstr[7];              
+              String tempStr;
+              EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+3, tempstr);
+              tempStr = String(tempstr);
+              if ( tempStr.length() != 0 ) {
+                tempStr = String("SENSOR "+tempStr);
+                tempStr = String(tempStr + " UNKNOWN");
+                Serial.print("Send: ");
+                Serial.println(tempStr);
+                if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+              }
+            }
+          }
+        }
+      }
+    }
+#endif
+
+    
+  private:
+    cmrs_toggle signalInputs[32];
+    cmrs_toggle prevInputs[32];
+
+};
+
+///
+/// cmrs_signal - signal
+///  init(byte) - sets the channel number
+///  set(byte)  - sets the hardware state of the indicator
+///  get()      - returns the state of the indicator
+///
+
+class cmrs_signal {
+  public:
+    cmrs_signal() {
+      _state = 0;
+    }
+    
+    ~cmrs_signal() {    
+    }
+    
+    void init (byte arg) {
+      _state = 0;
+      _previousState = 0;
+      _leadingState = 0;
+      _channel = arg;
+    }
+    
+    void set(byte arg) {
+      _state = arg;
+      if ( _channel < 4 ) {
+        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {
+          signalA.digitalWrite(3*_channel, LOW);
+        }
+        else {
+          signalA.digitalWrite(3*_channel, HIGH);
+        }
+         if ( ( _state == 4 ) || (( _state == 5 ) && ( isTheFlasher == 0 )) ) {
+          signalA.digitalWrite(3*_channel+1, LOW);
+        }
+        else {
+          signalA.digitalWrite(3*_channel+1, HIGH);
+        }
+         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {
+          signalA.digitalWrite(3*_channel+2, LOW);
+        }
+        else {
+          signalA.digitalWrite(3*_channel+2, HIGH);
+        }      
+      }
+      else {
+        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {
+          signalB.digitalWrite(3*(_channel - 4), LOW);
+        }
+        else {
+          signalB.digitalWrite(3*(_channel - 4), HIGH);
+        }
+         if ( ( _state == 4 ) || (( _state == 5 ) && ( isTheFlasher == 0 )) ) {
+          signalB.digitalWrite(3*(_channel - 4)+1, LOW);
+        }
+        else {
+          signalB.digitalWrite(3*(_channel - 4)+1, HIGH);
+        }
+         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {
+          signalB.digitalWrite(3*(_channel - 4)+2, LOW);
+        }
+        else {
+          signalB.digitalWrite(3*(_channel - 4)+2, HIGH);
+        }       
+      }
+      if ( _state != _previousState ) {
+#ifdef NETWORK_SYSTEM
+        sendUpdate();
+#endif
+        _previousState = _state;
+      }
+    }
+    
+    void setLeadingState(byte _arg) {
+      _leadingState = _arg;
+    }
+    
+    byte get() {
+      return _state;
+    }
+    
+    byte getLeadingState() {
+      return _leadingState;
+    }
+    
+#ifdef NETWORK_SYSTEM   
+    void sendUpdate() {
+      char tempstr[7];
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
+        String tempStr;
+        EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*(_channel)+1,tempstr);
+        tempStr = String(tempstr);
+        if ( tempStr.length() != 0 ) {
+          tempStr = String("SIGNALHEAD "+String(tempstr));
+          switch ( _state ) {
+            case 0 : 
+            default :
+              tempStr = String(tempStr + " UNKNOWN");
+              break;
+            case 1 : 
+              tempStr = String(tempStr + " DARK");
+              break;
+            case 2 : 
+              tempStr = String(tempStr + " GREEN");
+              break;
+            case 3 : 
+              tempStr = String(tempStr + " FLASHGREEN");
+              break;
+            case 4 : 
+              tempStr = String(tempStr + " YELLOW");
+              break;
+            case 5 : 
+              tempStr = String(tempStr + " FLASHYELLOW");
+              break;
+            case 6 : 
+              tempStr = String(tempStr + " RED");
+              break;
+            case 7 : 
+              tempStr = String(tempStr + " FLASHRED");
+              break;
+            case 8 : 
+              tempStr = String(tempStr + " LUNAR");
+              break;
+            case 9 : 
+              tempStr = String(tempStr + " FLASHLUNAR");
+              break;
+          }
+          Serial.print("Send: ");
+          Serial.println(tempStr);
+          if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+        }
+      }
+    }
+    
+    void sendLeadingUpdate() {
+      char tempstr[7];
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
+        String tempStr;
+        EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*(_channel)+8,tempstr);
+        tempStr = String(tempstr);
+        if ( tempStr.length() != 0 ) {
+          tempStr = String("SIGNALHEAD "+String(tempstr));
+          tempStr = String(tempStr + " UNKNOWN");
+          Serial.print("Send: ");
+          Serial.println(tempStr);
+          if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+        }
+      }    
+    }
+#endif
+    
+  private:
+    byte _state;
+    byte _previousState;
+    byte _leadingState;
+    byte _channel;
+    
+};
+
+
+///
+/// CMRSsignals - signal interface
+///  init()           - initializes the inputs as 0 
+///  scan()           - not used
+///  set(int,byte)   - set state of i-th signal with value j
+///  get(int) 		 - get state of i-th signal
+///
+// signal settings
+//  0 - Unknown
+//  1 - Dark
+//  2 - Green
+//  3 - Flashing Green
+//  4 - Yellow
+//  5 - Flashing Yellow
+//  6 - Red
+//  7 - Flashing Red
+//  8 - Lunar
+//  9 - Flashing Lunar
+
+class CMRSsignals {
+  public:
+    CMRSsignals() {
+    }
+    
+    ~CMRSsignals() {
+    }
+    
+    void init() {
+      byte temp;
+      int i;
+      EEPROM.get(ADDRESS_NUMBER_SIGNAL_BOARDS, temp);
+      _boards = int(temp);
+#ifdef DBGLVL1
+      Serial.print("INIT: Initializing Signals.");
+#endif
+      if ( _boards > 0 ) {
+        for ( i = 0; i < 16; i++ ) {
+          signalA.pinMode(i , OUTPUT, HIGH);
+          if ( _boards > 1 ) signalB.pinMode(i, OUTPUT, HIGH);
+        }
+        for ( i = 0; i < 8; i++ ) {
+          signal[i].init(i);
+        }
+//        signalA.begin();
+//        if ( _boards > 1 ) signalB.begin();
+      }
+    }  
+
+    byte get(int arg_i) {
+      return signal[arg_i].get();
+    }
+    
+    void set(int arg_i, byte arg_val) {
+      signal[arg_i].set(arg_val);
+    }
+    
+    byte getLeadingState(int arg_i) {
+      return signal[arg_i].getLeadingState();
+    }
+    
+    void setLeadingState(int arg_i, byte arg_val) {
+      signal[arg_i].setLeadingState(arg_val);
+    }
+    
+    void advanceSignal(int arg_i) {
+      byte _leadingState;
+      byte _newState;
+      _leadingState = getLeadingState(arg_i);
+ #if 0
+      switch ( _leadingState ) {
+        case 2 :  // Green
+        case 3 :  // Flashing Green
+        case 4 :  // Yellow
+        case 5 :  // Flashing Yellow
+          _newState = 2;  // set Green
+          break;
+        case 6 :  // Red
+        case 7 :  // Flashing Red
+          _newState = 4;  // set Yellow
+          break;
+        default :
+          _newState = 2;  // other states - set Green for now
+          break;         
+      }
+#endif
+      if ( _leadingState < 6 ) {
+        _newState = 2;
+      }
+      else if ( _leadingState < 8 ) {
+        _newState = 4;
+      }
+      set(arg_i, _newState);
+    }
+    
+#ifdef NETWORK_SYSTEM
+    void sendSignalsStatus(int arg) {
+      if ( _boards > 0 ) {
+        if (( arg >= 0 ) && ( arg < 4*_boards )) {
+          signal[arg].sendUpdate();
+          if ( signal[arg].getLeadingState() == 0 ) {
+            signal[arg].sendLeadingUpdate();
+          }
+        }
+      }
+    }
+#endif
+
+  private:
+    cmrs_signal signal[16];
+    int 		_boards;
+
+};
+
+
+#endif
+
 
 ///
 /// Class instantation
@@ -850,6 +1296,13 @@ CMRSquadSensors TheQuadSensors;
 CMRSpower		ThePowerSystem;
 #endif
 
+#ifdef SIGNAL_SYSTEM
+CMRSsensors		TheSensors;
+CMRSsignalInputs TheSignalInputs;
+CMRSsignals	    TheSignals;
+#endif
+
+
 ///
 ///  BEGIN SETUP
 ///
@@ -857,7 +1310,8 @@ CMRSpower		ThePowerSystem;
 void setup() {
   Serial.begin(9600);
   eeprom_init(); 
-  Serial.println("CMRS CP_2560 v0.6.8 2024-09-11");
+  Serial.print("CMRS CP_2560 ");
+  Serial.println(SW_VERSION);
 #ifdef SD_SYSTEM
   Serial.println("Starting SD System...");
   Ethernet.init(10); // Arduino Ethernet board SS  
@@ -881,7 +1335,12 @@ void setup() {
   Serial1.begin(9600);
 #endif
 
-//  watchdog.enable(Watchdog::TIMEOUT_1S);
+#ifdef SIGNAL_SYSTEM
+  TheSensors.init();
+  TheSignalInputs.init();
+  TheSignals.init();
+#endif
+
 }
 
 ///
@@ -890,21 +1349,21 @@ void setup() {
 
 void loop() {
   unsigned long currentTime = millis();
-  if ( currentTime < prevTime )
-    prevTime = currentTime; 
-  if ( currentTime < tempTime )
-    tempTime = currentTime;
+  if ( currentTime < ulsPreviousTime )
+    ulsPreviousTime = currentTime; 
+  if ( currentTime < ulsTempTime )
+    ulsTempTime = currentTime;
 
 
 #ifdef NETWORK_SYSTEM
-  if (( run_first_time == 1 ) && ( reconnect_timer == 0 )) {
+  if (( isRunFirstTime == 1 ) && ( lsReconnectionTimer == 0 )) {
     connectServer();
-    run_first_time = 0;
-    reconnect_timer = 60000;
+    isRunFirstTime = 0;
+    lsReconnectionTimer = 60000;
     watchdog.enable(Watchdog::TIMEOUT_1S);
   }
-  if (client.available()) {
-    char c = client.read();
+  if (TheEthernetClient.available()) {
+    char c = TheEthernetClient.read();
     if ( c != 10 )
       receiveBuffer = String(receiveBuffer+String(c));
     if ( c == 10 ) {
@@ -935,27 +1394,27 @@ void loop() {
     }
   }
 #endif
-    // if the server's disconnected, stop the client:
-  if ( (!client.connected() ) && ( run_first_time == 0 ) ) {
+    // if the server's disconnected, stop the TheEthernetClient:
+  if ( (!TheEthernetClient.connected() ) && ( isRunFirstTime == 0 ) ) {
     Serial.println();
     Serial.println("disconnecting.");
-    client.stop();
+    TheEthernetClient.stop();
     // do nothing:
-    run_first_time = 2;  //waiting for timer
-    jmri_running = 0;
-    reconnect_timer = 60000;
+    isRunFirstTime = 2;  //waiting for timer
+    bsIsJmriRunning = 0;
+    lsReconnectionTimer = 60000;
   }  
 #endif
   
-  if ( currentTime > ( prevTime + TIME_STEP ) ) {
+  if ( currentTime > ( ulsPreviousTime + TIME_STEP ) ) {
   
 #ifdef NETWORK_SYSTEM  
-    if ( ( reconnect_timer > 0 ) && ( run_first_time == 2 ) ) {
-      reconnect_timer = reconnect_timer - TIME_STEP;
+    if ( ( lsReconnectionTimer > 0 ) && ( isRunFirstTime == 2 ) ) {
+      lsReconnectionTimer = lsReconnectionTimer - TIME_STEP;
     }
-    if ( reconnect_timer <= 0 ) {
-      reconnect_timer = 0;
-      run_first_time = 1;
+    if ( lsReconnectionTimer <= 0 ) {
+      lsReconnectionTimer = 0;
+      isRunFirstTime = 1;
     }
 #endif
 
@@ -966,17 +1425,38 @@ void loop() {
     TheQuadSensors.scan();
 #endif
     
-    prevTime += TIME_STEP;
+#ifdef SIGNAL_SYSTEM
+    TheSensors.scan();
+    setSignalInputs();
+    TheSignalInputs.scan();
+    set_signals();
+#endif
+
+    ulsPreviousTime += TIME_STEP;
   }
 
-#ifdef TURNOUT_SYSTEM
-  if ( currentTime > ( tempTime + 1000 )) {
-    tempTime += 1000;
+  if ( currentTime > ( ulsTempTime + 500 )) {
+    ulsTempTime += 500;
     counts++;
-    TheTurnouts.sendTurnoutsStatus((counts+40) % 60);
-    TheQuadSensors.sendQuadSensorsStatus((counts+20) % 60);
-  }
+    if ( isTheFlasher == 0 ) {
+      isTheFlasher = 1;
+    }
+    else {
+      isTheFlasher = 0;
+    }
+#ifdef TURNOUT_SYSTEM
+    TheTurnouts.sendTurnoutsStatus((counts+80) % 120);
+    TheQuadSensors.sendQuadSensorsStatus((counts+40) % 120);
 #endif
+
+#ifdef SIGNAL_SYSTEM
+    TheSignalInputs.sendSignalInputsStatus((counts+10) % 120);
+    TheSensors.sendSensorsStatus((counts+60) % 120);
+    TheSignals.sendSignalsStatus((counts+100) % 120);
+#endif
+
+  }
+
   watchdog.reset();
 }
 
@@ -1082,6 +1562,51 @@ void set_yard_turnouts(byte track) {
 
 #endif
 
+#ifdef SIGNAL_SYSTEM
+
+//
+// setSignalInputs
+//  Scan the 32 Signal Input entries at set or unset those inputs that are driven by 
+//  local varibles, such as turnout positions and sensors.
+//
+void setSignalInputs() {
+  int i;
+  byte temp[3];
+  byte _state;
+  for ( i = 0 ; i < 32 ; i++ ) {
+    EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*i, temp);
+    if (( temp[0] != 0 ) && ( temp[1] != 0 )) {
+      switch ( temp[1] ) {
+        case 1 :	
+                EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[2]-1, _state);
+//                TheSignalInputs.set(temp[0], _state);
+        		break;
+        case 2 :
+                EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[2]-1, _state);
+                if ( _state == 1 ) {
+                  _state = 0;
+                }
+                else {
+                  _state = 1;
+                }
+//                TheSignalInputs.set(temp[0], _state);                
+        		break;
+        case 3 :
+        		_state = TheSensors.getSensor(temp[2]-1);
+//        		TheSignalInputs.set(temp[0], _state);
+        		break;
+        case 4 :
+        		_state = TheQuadSensors.getQuadSensor(temp[2]-1);
+//        		TheSignalInputs.set(temp[0], _state);
+        		break;
+      }
+      TheSignalInputs.set(temp[0], _state);
+    }
+  }
+}
+
+#endif
+
 //////////////////////////////////////////////////////////////////////
 //
 //  NETWORK SYSTEM
@@ -1128,7 +1653,7 @@ byte connectServer() {
   Serial.println("connecting...");
 
   // if you get a connection, report back via serial:
-  if (ret_val = client.connect(server, 2048)) {
+  if (ret_val = TheEthernetClient.connect(server, 2048)) {
     Serial.println("connected");
   } else {
     // if you didn't get a connection to the server:
@@ -1141,7 +1666,6 @@ void processCommandBuffer() {
   int i;
   char tempstr[7];
   byte temp;
-  EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
   String cmdLabel, command, tempStr;
   
   index1 = commandBuffer.indexOf(" ");
@@ -1149,7 +1673,8 @@ void processCommandBuffer() {
   cmdLabel = commandBuffer.substring(index1+1, index2);
   command = commandBuffer.substring(index2+1);
 #ifdef TURNOUT_SYSTEM
-  if ( commandBuffer.startsWith("TURNOUT") ) {
+  EEPROM.get(ADDRESS_NUMBER_QUADTURNOUT_BOARDS, temp);
+  if ( commandBuffer.startsWith("TURNOUT") ) {				// Receiving a remote turnout command
     for ( i = 0 ; i < 4*temp ; i ++ ) {
       EEPROM.get(QUADTURNOUT_BASEADD+SIZE_OF_TURNOUT*i+1,tempstr);
       tempStr = String(tempstr);
@@ -1170,33 +1695,37 @@ void processCommandBuffer() {
         }          
       }
     }
-  } else if ( commandBuffer.startsWith("SENSOR") ) {
+  } else if ( commandBuffer.startsWith("SENSOR") ) {		// Receiving a remote sensor input
 #ifdef SIGNAL_SYSTEM
-    for ( i = 0 ; i < N_SIGNALS ; i++ ) {
-      EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+17,tempstr);
-      tempStr = String(tempstr);
-      if ( tempStr == cmdLabel ) {
-        if ( command.startsWith("ACTIVE") ) {
-          stateRemoteSensor[i] = 1;
-        } else if ( command.startsWith("INACTIVE") ) {
-          stateRemoteSensor[i] = 0;
+    SignalInputObject siobj;
+    for ( i = 0 ; i < 32 ; i++ ) {
+      EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*i,siobj);
+      if (( siobj.signalNumber != 0 ) && ( siobj.inputMode == 7 )) {
+        tempStr = String(siobj.inputName);
+        if ( tempStr == cmdLabel ) {
+          if ( command.startsWith("ACTIVE") ) {
+            TheSignalInputs.set(i, 1);
+          } else if ( command.startsWith("INACTIVE") ) {
+            TheSignalInputs.set(i, 0);
+          }
         }
       }
     }
 #endif
   } else if ( commandBuffer.startsWith("SIGNALHEAD") ) {
 #ifdef SIGNAL_SYSTEM
-    for ( i = 0 ; i < N_SIGNALS ; i++ ) {
-      EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i+10,tempstr);
-      tempStr = String(tempstr);
+    SignalObject sobj;
+    EEPROM.get(ADDRESS_NUMBER_SIGNAL_BOARDS, temp);
+    for ( i = 0 ; i < 4*temp ; i++ ) {
+      EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i,sobj);
+      tempStr = String(sobj.leadingSignalHead);
       if ( tempStr == cmdLabel ) {
-        stateLeadingSignal[i] = signalAspectToCode(command);
-//        Serial.println(stateLeadingSignal[i]);       
+        TheSignals.setLeadingState(i,signalAspectToCode(command));
       }
     }  
 #endif  
   } else if ( commandBuffer.startsWith("NODE jmri") ) {
-    jmri_running = 1;
+    bsIsJmriRunning = 1;
     Serial.println("Connection to JMRI successful.");
   }
 #endif
@@ -1215,7 +1744,88 @@ void processCommandBuffer() {
 #endif
 }
 
+#endif
 
+#ifdef SIGNAL_SYSTEM
+
+byte signalAspectToCode(String arg) {
+  byte rtn_val;
+  if ( arg.startsWith("DARK") ) {
+    rtn_val = 1;
+  }
+  else if ( arg.startsWith("RED") ) {
+    rtn_val = 6;
+  }
+  else if ( arg.startsWith("FLASHRED") ) {
+    rtn_val = 7;
+  }
+  else if ( arg.startsWith("YELLOW") ) {
+    rtn_val = 4;
+  }
+  else if ( arg.startsWith("FLASHYELLOW") ) {
+    rtn_val = 5;
+  }
+  else if ( arg.startsWith("GREEN") ) {
+    rtn_val = 2;
+  }
+  else if ( arg.startsWith("FLASHGREEN") ) {
+    rtn_val = 3;
+  }
+  else if ( arg.startsWith("LUNAR") ) {
+    rtn_val = 8;
+  }
+  else if ( arg.startsWith("FLASHLUNAR") ) {
+    rtn_val = 9;
+  }
+  else if ( arg.startsWith("UNKNOWN") ) {
+    rtn_val = 0;
+  }
+  else {
+    rtn_val = 0;
+  }
+  return rtn_val;
+}
+
+void set_signals() {
+  byte _boards;
+  byte _signalNumber;
+  byte  temp2;
+  byte _occupancy;
+  int i,j;
+
+  EEPROM.get(ADDRESS_NUMBER_SIGNAL_BOARDS, _boards);
+  for ( i = 0 ; i < 4*_boards ; i++ ) {
+    EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i,_signalNumber);
+    if ( _signalNumber != 0 ) {
+      _occupancy = 0;
+      for ( j = 0 ; j < 32 ; j++ ) {
+        EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*j,temp2);
+        if ( temp2 == _signalNumber ) {
+          if ( TheSignalInputs.get(j) == 1 ) {
+            _occupancy = 1;
+          }
+        }
+      }
+      if ( _occupancy == 1 ) {
+        TheSignals.set(i, 6);  // RED
+      }
+      else {
+        TheSignals.advanceSignal(i);        
+      }
+    }
+  }
+}
+// signal settings
+//  0 - Unknown
+//  1 - Dark
+//  2 - Green
+//  3 - Flashing Green
+//  4 - Yellow
+//  5 - Flashing Yellow
+//  6 - Red
+//  7 - Flashing Red
+//  8 - Lunar
+//  9 - Flashing Lunar
 #endif
 
 
@@ -1268,6 +1878,14 @@ void eeprom_init() {
       EEPROM.update(SENSOR_BASEADD+i,byte(0));
     }
   }
+  
+  for ( i = 0 ; i < 32*SIZE_OF_SIGNAL_INPUT ; i++ ) {
+    EEPROM.get(SIGNAL_INPUT_BASEADD+i,temp);
+    if ( temp == 255 ) {
+      EEPROM.update(SIGNAL_INPUT_BASEADD+i,byte(0));
+    }
+  }
+  
   
   for ( i = 0 ; i < 16*SIZE_OF_SIGNAL ; i++ ) {
     EEPROM.get(SIGNAL_BASEADD+i,temp);
@@ -1614,46 +2232,62 @@ void show_configuration() {
       Serial.println(val2.nameLabel); 
     }
   }
-//  544   567   Signal 1/1 [ 0 - sensor ; 1 - turnout1 ; 2 - turnout2 ; [3-9] signalhead name ; 
-//                            [10-16] leading (remote signalhead name ; [17-23] remote sensor name ]
-//  568   591   Signal 1/2
-//  592   615   Signal 1/3
-//  616   639   Signal 1/4
-//  640   663   Signal 2/1
-//  664   687   Signal 2/2
-//  688   711   Signal 2/3
-//  712   735   Signal 2/4
-//  736   759   Signal 3/1
-//  760   783   Signal 3/2
-//  784   807   Signal 3/3
-//  808   831   Signal 3/4
-//  832   855   Signal 4/1
-//  856   879   Signal 4/2
-//  880   903   Signal 4/3
-//  904   927   Signal 4/4
-  EEPROM.get(20,contents);
-  for ( i = 0; i < 4*contents ; i++ ) {
-    SignalObject sig;
-    EEPROM.get(SIGNAL_BASEADD + SIZE_OF_SIGNAL*i,sig);
-    if (1) {
-      Serial.print("Signal ");
-      Serial.print(int(i/4));
-      Serial.print("/");
-      Serial.print(i-int(i/4)*4);
-      Serial.print(" - sensor ");
-      Serial.print(sig.sensorNumber);
-      Serial.print(" turnouts ");
-      Serial.print(sig.turnout1Number); 
-      Serial.print(" ");
-      Serial.print(sig.turnout2Number);
-      Serial.print(" name ");
-      Serial.print(sig.signalHead);
-      Serial.print(" leading ");
-      Serial.print(sig.leadingSignalHead);
-      Serial.print(" remote ");
-      Serial.println(sig.remoteSensor);
+//  544   553  Signal Input 1 [ 0 - signal ( 0 is off ) ; 1 - mode ( 0 is off, 1 is local turnout,
+//                                2 is local turnout (reversed), 3 is local sensor, 4 is local
+//                                quad turnout sensor, 5 is remote turnout, 6 is remote turnout (reversed),
+//                                  7 is remote sensor ) ; 2 - local index, [3-9] remote name ]
+//  554   563   Signal Input 2
+//  564   573   Signal Input 3
+//  574   583   Signal Input 4
+//  584   593   Signal Input 5
+//  594   603   Signal Input 6
+//  604   613   Signal Input 7
+//  614   623   Signal Input 8
+//  624   633   Signal Input 9
+//  634   643   Signal Input 10
+//  644   653   Signal Input 11
+//  654   663   Signal Input 12
+//  664   673   Signal Input 13
+//  674   683   Signal Input 14
+//  684   693   Signal Input 15
+//  694   703   Signal Input 16
+//  704   713   Signal Input 17
+//  714   723   Signal Input 18
+//  724   733   Signal Input 19
+//  734   743   Signal Input 20
+//  744   753   Signal Input 21
+//  754   763   Signal Input 22
+//  764   773   Signal Input 23
+//  774   783   Signal Input 24
+//  784   793   Signal Input 25
+//  794   803   Signal Input 26
+//  804   813   Signal Input 27
+//  814   823   Signal Input 28
+//  824   833   Signal Input 29
+//  834   843   Signal Input 30
+//  844   853   Signal Input 31
+//  854   863   Signal Input 32
+
+  for ( i = 0 ; i < 32 ; i++ ) {
+    SignalInputObject sobj;
+    EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*i, sobj);
+    if (( sobj.signalNumber != 0 ) && ( sobj.inputMode != 0 )) {
+      Serial.print("Sig Input ");
+      Serial.print(i);
+      Serial.print(" signal ");
+      Serial.print(sobj.signalNumber);
+      Serial.print(" mode ");
+      Serial.print(sobj.inputMode);
+      Serial.print(" index ");
+      Serial.print(sobj.inputIndex);
+      if ( sobj.inputMode > 3 ) {
+        Serial.print(" label ");
+        Serial.print(sobj.inputName);
+      }
+      Serial.println();
     }
   }
+
 //  928   929   Indicator 1/1  [ 0 - switch number ; 1 - sensor number (if switch number is 0 ]
 //  930   931   Indicator 1/2
 //  932   933   Indicator 1/3
@@ -1680,6 +2314,39 @@ void show_configuration() {
 //  960   975   Track Power Saved State
 //  976   1023  RESERVED
 //
+// 1300  1314   Signal 1/1 [ 0 - active ; [1-7] signalhead name ; 
+//                            [8-14] leading remote signalhead name ]
+// 1315  1329   Signal 1/2
+// 1330  1344   Signal 1/3
+// 1345  1359   Signal 1/4
+// 1360  1374   Signal 2/1
+// 1375  1389   Signal 2/2
+// 1390  1404   Signal 2/3
+// 1405  1419   Signal 2/4
+// 1420  1434   Signal 3/1
+// 1435  1449   Signal 3/2
+// 1450  1464   Signal 3/4
+// 1465  1479   Signal 4/1
+// 1480  1494   Signal 4/2
+// 1495  1509   Signal 4/3
+// 1510  1524   Signal 4/4
+  EEPROM.get(20,contents);
+  for ( i = 0; i < 4*contents ; i++ ) {
+    SignalObject sig;
+    EEPROM.get(SIGNAL_BASEADD + SIZE_OF_SIGNAL*i,sig);
+    if (1) {
+      Serial.print("Signal ");
+      Serial.print(int(i/4));
+      Serial.print("/");
+      Serial.print(i-int(i/4)*4);
+      Serial.print(" - signal ");
+      Serial.print(sig.signalNumber);
+      Serial.print(" name ");
+      Serial.print(sig.signalHead);
+      Serial.print(" leading ");
+      Serial.println(sig.leadingSignalHead);
+    }
+  }
 }
 
 
@@ -1927,22 +2594,43 @@ void scan_i2c() {
 //  520   527   Sensor 14
 //  528   535   Sensor 15
 //  536   543   Sensor 16
-//  544   567   Signal 1/1 [ 0 - sensor ; 1 - turnout1 ; 2 - turnout2 ; [3-9] signalhead name ; 
-//                            [10-16] leading (remote signalhead name ; [17-23] remote sensor name ]
-//  568   591   Signal 1/2
-//  592   615   Signal 1/3
-//  616   639   Signal 1/4
-//  640   663   Signal 2/1
-//  664   687   Signal 2/2
-//  688   711   Signal 2/3
-//  712   735   Signal 2/4
-//  736   759   Signal 3/1
-//  760   783   Signal 3/2
-//  808   831   Signal 3/4
-//  832   855   Signal 4/1
-//  856   879   Signal 4/2
-//  880   903   Signal 4/3
-//  904   927   Signal 4/4
+
+//  544   553	Signal Input 1 [ 0 - signal ( 0 is off ) ; 1 - mode ( 0 is off, 1 is local turnout,
+//                                2 is local turnout (reversed), 3 is local sensor, 4 is local
+//                                quad turnout sensor, 5 is remote turnout, 6 is remote turnout (reversed),
+//                                  7 is remote sensor ) ; 2 - local index, [3-9] remote name ]
+//  554   563   Signal Input 2
+//  564	  573	Signal Input 3
+//  574   583   Signal Input 4
+//  584   593   Signal Input 5
+//  594   603   Signal Input 6
+//  604   613   Signal Input 7
+//  614   623   Signal Input 8
+//  624   633   Signal Input 9
+//  634   643   Signal Input 10
+//  644   653   Signal Input 11
+//  654   663   Signal Input 12
+//  664   673   Signal Input 13
+//  674   683   Signal Input 14
+//  684   693   Signal Input 15
+//  694   703   Signal Input 16
+//  704   713   Signal Input 17
+//  714   723   Signal Input 18
+//  724   733   Signal Input 19
+//  734   743   Signal Input 20
+//  744   753   Signal Input 21
+//  754   763   Signal Input 22
+//  764   773   Signal Input 23
+//  774   783   Signal Input 24
+//  784   793   Signal Input 25
+//  794   803   Signal Input 26
+//  804   813   Signal Input 27
+//  814   823   Signal Input 28
+//  824   833   Signal Input 29
+//  834   843   Signal Input 30
+//  844   853   Signal Input 31
+//  854   863   Signal Input 32
+//  864   927	undefined
 //  928   929   Indicator 1/1  [ 0 - switch number ; 1 - sensor number (if switch number is 0 ]
 //  930   931   Indicator 1/2
 //  932   933   Indicator 1/3
@@ -1970,3 +2658,20 @@ void scan_i2c() {
 // 1232  1247   KBTRACK TRACK 13
 // 1248  1265   KBTRACK TRACK 14
 // 1266  1281   KBTRACK TRACK 15
+// 1282  1299   RESERVED
+// 1300  1314   Signal 1/1 [ 0 - active ; [1-7] signalhead name ; 
+//                            [8-14] leading remote signalhead name ]
+// 1315  1329   Signal 1/2
+// 1330  1344   Signal 1/3
+// 1345  1359   Signal 1/4
+// 1360  1374   Signal 2/1
+// 1375  1389   Signal 2/2
+// 1390  1404   Signal 2/3
+// 1405  1419   Signal 2/4
+// 1420  1434   Signal 3/1
+// 1435  1449   Signal 3/2
+// 1450  1464   Signal 3/4
+// 1465  1479   Signal 4/1
+// 1480  1494   Signal 4/2
+// 1495  1509   Signal 4/3
+// 1510  1524   Signal 4/4
