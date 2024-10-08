@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-10-05 v0.7.4a";
+const char* const SW_VERSION = "2024-10-07 v0.7.4c";
 
 // Ron Lehmer
 //
@@ -47,10 +47,16 @@ const char* const SW_VERSION = "2024-10-05 v0.7.4a";
 #define SIZE_OF_SENSOR 8
 
 #define SIGNAL_INPUT_BASEADD 544
-#define SIZE_OF_SIGNAL_INPUT 10
+#define SIZE_OF_SIGNAL_INPUT 9
+
+#define SIGNAL_LOGIC_BASEADD 832
+#define SIZE_OF_SIGNAL_LOGIC 4
 
 #define SIGNAL_BASEADD 1300
 #define SIZE_OF_SIGNAL 15
+
+#define NORDATA_BASEADD 1525
+#define SIZE_OF_NORDATA 1
 
 #define INDICATOR_BASEADD 928
 #define SIZE_OF_INDICATOR 2
@@ -119,10 +125,16 @@ struct SignalObject {
 };
 
 struct SignalInputObject {
-  byte signalNumber;
   byte inputMode;
   byte inputIndex;
   char inputName[7];
+};
+
+struct SignalLogicObject {
+  byte signalNumber;
+  byte aspect;
+  byte firstNOR;
+  byte numberNOR;
 };
 
 struct QuadSensorObject {
@@ -948,16 +960,17 @@ class CMRSsignalInputs {
 
 #ifdef NETWORK_SYSTEM
     void sendSignalInputsStatus(int arg) {
+      SignalInputObject siobj;
       if (( arg >= 0 ) && ( arg < 32)) {
         if ( get(arg) == 2 ) {
           if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
-            byte temp;
-            EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+1, temp);
-            if (( temp == 7 ) || ( temp == 8 )) {
-              char tempstr[7];              
+//            byte temp;
+            EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg, siobj);
+            if (( siobj.inputMode == 7 ) || ( siobj.inputMode == 8 )) {
+//              char tempstr[7];              
               String tempStr;
-              EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+3, tempstr);
-              tempStr = String(tempstr);
+//              EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+4, tempstr);
+              tempStr = String(siobj.inputName);
               if ( tempStr.length() != 0 ) {
                 tempStr = String("SENSOR "+tempStr);
                 tempStr = String(tempStr + " UNKNOWN");
@@ -1005,43 +1018,43 @@ class cmrs_signal {
     void set(byte arg) {
       _state = arg;
       if ( _channel < 4 ) {
-        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {
+        if ( ( _state == 8 ) || (( _state == 9 ) && ( isTheFlasher == 0 )) ) {  // green or flashing green
           signalA.digitalWrite(3*_channel, LOW);
         }
         else {
           signalA.digitalWrite(3*_channel, HIGH);
         }
-         if ( ( _state == 4 ) || (( _state == 5 ) && ( isTheFlasher == 0 )) ) {
+         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {  // yellow or flashing yellow
           signalA.digitalWrite(3*_channel+1, LOW);
         }
         else {
           signalA.digitalWrite(3*_channel+1, HIGH);
         }
-         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {
+         if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {  //red or flashing red
           signalA.digitalWrite(3*_channel+2, LOW);
         }
         else {
-          signalA.digitalWrite(3*_channel+2, HIGH);
+          signalA.digitalWrite(3*_channel+2, HIGH); 
         }      
       }
       else {
-        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {
+        if ( ( _state == 8 ) || (( _state == 9 ) && ( isTheFlasher == 0 )) ) {  // green or flashing green
           signalB.digitalWrite(3*(_channel - 4), LOW);
         }
         else {
           signalB.digitalWrite(3*(_channel - 4), HIGH);
         }
-         if ( ( _state == 4 ) || (( _state == 5 ) && ( isTheFlasher == 0 )) ) {
+         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {  // yellow or flashing yellow
           signalB.digitalWrite(3*(_channel - 4)+1, LOW);
         }
         else {
           signalB.digitalWrite(3*(_channel - 4)+1, HIGH);
         }
-         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {
+         if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {  // red or flashing red
           signalB.digitalWrite(3*(_channel - 4)+2, LOW);
         }
         else {
-          signalB.digitalWrite(3*(_channel - 4)+2, HIGH);
+          signalB.digitalWrite(3*(_channel - 4)+2, HIGH); 
         }       
       }
       if ( _state != _previousState ) {
@@ -1082,29 +1095,30 @@ class cmrs_signal {
               tempStr = String(tempStr + " DARK");
               break;
             case 2 : 
-              tempStr = String(tempStr + " GREEN");
-              break;
-            case 3 : 
-              tempStr = String(tempStr + " FLASHGREEN");
-              break;
-            case 4 : 
-              tempStr = String(tempStr + " YELLOW");
-              break;
-            case 5 : 
-              tempStr = String(tempStr + " FLASHYELLOW");
-              break;
-            case 6 : 
               tempStr = String(tempStr + " RED");
               break;
-            case 7 : 
+            case 3 : 
               tempStr = String(tempStr + " FLASHRED");
               break;
-            case 8 : 
+            case 4 : 
               tempStr = String(tempStr + " LUNAR");
               break;
-            case 9 : 
+            case 5 : 
               tempStr = String(tempStr + " FLASHLUNAR");
               break;
+            case 6 : 
+              tempStr = String(tempStr + " YELLOW");
+              break;
+            case 7 : 
+              tempStr = String(tempStr + " FLASHYELLOW");
+              break;
+            case 8 : 
+              tempStr = String(tempStr + " GREEN");
+              break;
+            case 9 : 
+              tempStr = String(tempStr + " FLASHGREEN");
+              break;
+
           }
           Serial.print("Send: ");
           Serial.println(tempStr);
@@ -1149,14 +1163,14 @@ class cmrs_signal {
 // signal settings
 //  0 - Unknown
 //  1 - Dark
-//  2 - Green
-//  3 - Flashing Green
-//  4 - Yellow
-//  5 - Flashing Yellow
-//  6 - Red
-//  7 - Flashing Red
-//  8 - Lunar
-//  9 - Flashing Lunar
+//  2 - Red
+//  3 - Flashing Red
+//  4 - Lunar
+//  5 - Flashing Lunar
+//  6 - Yellow
+//  7 - Flashing Yellow
+//  8 - Green
+//  9 - Flashing Green
 
 class CMRSsignals {
   public:
@@ -1204,28 +1218,12 @@ class CMRSsignals {
       byte _leadingState;
       byte _newState;
       _leadingState = getLeadingState(arg_i);
- #if 0
-      switch ( _leadingState ) {
-        case 2 :  // Green
-        case 3 :  // Flashing Green
-        case 4 :  // Yellow
-        case 5 :  // Flashing Yellow
-          _newState = 2;  // set Green
-          break;
-        case 6 :  // Red
-        case 7 :  // Flashing Red
-          _newState = 4;  // set Yellow
-          break;
-        default :
-          _newState = 2;  // other states - set Green for now
-          break;         
+
+      if ( _leadingState < 6 ) { // red or lunar
+        _newState = 6;			 // set yellow
       }
-#endif
-      if ( _leadingState < 6 ) {
-        _newState = 2;
-      }
-      else if ( _leadingState < 8 ) {
-        _newState = 4;
+      else if ( _leadingState < 10 ) {  // yellow or green
+        _newState = 8;					// set green
       }
       set(arg_i, _newState);
     }
@@ -1256,6 +1254,7 @@ class CMRSsignals {
 ///
 /// Class instantation
 ///
+
 #ifdef TURNOUT_SYSTEM
 CMRStoggles     TheToggles;
 CMRSturnouts    TheTurnouts;
@@ -1490,13 +1489,13 @@ void setIndicators() {
 
 #ifdef KEYPAD_SYSTEM
 
-//
-// set_yard_turnouts
-// Read in the 16 turnout settings to get into a support yeard track.
-//  If value is set to 0, then send a 2 - close to the turnout
-//  If value is set to 1, then send a 1 - throw the turnout
-//  track = 0 means line all lead switches for the mainline
-//
+///
+/// set_yard_turnouts
+/// Read in the 16 turnout settings to get into a support yeard track.
+///  If value is set to 0, then send a 2 - close to the turnout
+///  If value is set to 1, then send a 1 - throw the turnout
+///  track = 0 means line all lead switches for the mainline
+///
 
 void set_yard_turnouts(byte track) {
   TrackMapObject _track_map;
@@ -1516,43 +1515,40 @@ void set_yard_turnouts(byte track) {
 
 #ifdef SIGNAL_SYSTEM
 
-//
-// setSignalInputs
-//  Scan the 32 Signal Input entries at set or unset those inputs that are driven by 
-//  local varibles, such as turnout positions and sensors.
-//
+///
+/// setSignalInputs
+///  Scan the 32 Signal Input entries at set or unset those inputs that are driven by 
+///  local varibles, such as turnout positions and sensors.
+///
+
 void setSignalInputs() {
   int i;
-  byte temp[3];
+  byte temp[2];
   byte _state;
   for ( i = 0 ; i < 32 ; i++ ) {
     EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*i, temp);
-    if (( temp[0] != 0 ) && ( temp[1] < 5 )) {  //don't process inputs that are controlled by the network
-      switch ( temp[1] ) {
+    if (( temp[0] != 0 ) && ( temp[0] < 5 )) {  //don't process inputs that are controlled by the network
+      switch ( temp[0] ) {
         case 1 :	
-                EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[2]-1, _state);
-//                TheSignalInputs.set(temp[0], _state);
+                EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[1]-1, _state);
         		break;
         case 2 :
-                EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[2]-1, _state);
+                EEPROM.get(QUADTURNOUT_STATE_BASEADD+temp[1]-1, _state);
                 if ( _state == 1 ) {
                   _state = 0;
                 }
                 else {
                   _state = 1;
                 }
-//                TheSignalInputs.set(temp[0], _state);                
         		break;
         case 3 :
-        		_state = TheSensors.getSensor(temp[2]-1);
-//        		TheSignalInputs.set(temp[0], _state);
+        		_state = TheSensors.getSensor(temp[1]-1);
         		break;
         case 4 :
-        		_state = TheQuadSensors.getQuadSensor(temp[2]-1);
-//        		TheSignalInputs.set(temp[0], _state);
+        		_state = TheQuadSensors.getQuadSensor(temp[1]-1);
         		break;
       }
-      TheSignalInputs.set(temp[0], _state);
+      TheSignalInputs.set(i, _state);
     }
   }
 }
@@ -1639,7 +1635,7 @@ void processCommandBuffer() {
     SignalInputObject siobj;
     for ( i = 0 ; i < 32 ; i++ ) {
       EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*i,siobj);
-      if (( siobj.signalNumber != 0 ) && (( siobj.inputMode == 7 ) || ( siobj.inputMode == 8 ))) {
+      if (( siobj.inputMode == 7 ) || ( siobj.inputMode == 8 )) {
         tempStr = String(siobj.inputName);
         if ( tempStr == cmdLabel ) {
           if ( command.startsWith("ACTIVE") ) {
@@ -1693,80 +1689,111 @@ byte signalAspectToCode(String arg) {
     rtn_val = 1;
   }
   else if ( arg.startsWith("RED") ) {
-    rtn_val = 6;
-  }
-  else if ( arg.startsWith("FLASHRED") ) {
-    rtn_val = 7;
-  }
-  else if ( arg.startsWith("YELLOW") ) {
-    rtn_val = 4;
-  }
-  else if ( arg.startsWith("FLASHYELLOW") ) {
-    rtn_val = 5;
-  }
-  else if ( arg.startsWith("GREEN") ) {
     rtn_val = 2;
   }
-  else if ( arg.startsWith("FLASHGREEN") ) {
+  else if ( arg.startsWith("FLASHRED") ) {
     rtn_val = 3;
   }
-  else if ( arg.startsWith("LUNAR") ) {
+  else if ( arg.startsWith("YELLOW") ) {
+    rtn_val = 6;
+  }
+  else if ( arg.startsWith("FLASHYELLOW") ) {
+    rtn_val = 7;
+  }
+  else if ( arg.startsWith("GREEN") ) {
     rtn_val = 8;
   }
-  else if ( arg.startsWith("FLASHLUNAR") ) {
+  else if ( arg.startsWith("FLASHGREEN") ) {
     rtn_val = 9;
   }
-#if 0
-  else if ( arg.startsWith("UNKNOWN") ) {
-    rtn_val = 0;
+  else if ( arg.startsWith("LUNAR") ) {
+    rtn_val = 4;
   }
-#endif
+  else if ( arg.startsWith("FLASHLUNAR") ) {
+    rtn_val = 5;
+  }
   else {
     rtn_val = 0;
   }
   return rtn_val;
 }
 
-void set_signals() {
-  byte _boards;
-  byte _signalNumber;
-  byte  temp2;
-  byte _occupancy;
-  int i,j;
+///
+/// set_signals()
+///   Scans the list of signal logic methods 
+///   Assume the signal will be red unless one of these strings of NAD terms is TRUE
+///   Multiple logic strings can be defined for a signal - last set of terms that is TRUE has priority
+///   Then check if there are any restrictions from a leading signal 
+///   
 
-  EEPROM.get(ADDRESS_NUMBER_SIGNAL_BOARDS, _boards);
-  for ( i = 0 ; i < 4*_boards ; i++ ) {
-    EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i,_signalNumber);
-    if ( _signalNumber != 0 ) {
-      _occupancy = 0;
-      for ( j = 0 ; j < 32 ; j++ ) {
-        EEPROM.get(SIGNAL_INPUT_BASEADD+SIZE_OF_SIGNAL_INPUT*j,temp2);
-        if ( temp2 == _signalNumber ) {
-          if ( TheSignalInputs.get(j) == 1 ) {
-            _occupancy = 1;
-          }
+void set_signals() {
+  byte _intermediateState[8];
+  byte _boards;
+  byte _leadingState;
+  byte _aspect;
+  byte _state;
+  byte _mode;
+  byte _nor;
+  
+  int i,j;
+  SignalLogicObject lobj;
+
+  for ( i = 0 ; i < 8 ; i++ ) {
+    _intermediateState[i] = 0;  // Unknown by default
+  }
+
+  for ( i = 0 ; i < 16 ; i++ ) {
+    EEPROM.get(SIGNAL_LOGIC_BASEADD + SIZE_OF_SIGNAL_LOGIC*i, lobj);
+    if ( lobj.signalNumber != 0 ) { 
+      _state = 1;
+      for ( j = 0 ; j < lobj.numberNOR ; j++ ) {
+        EEPROM.get(NORDATA_BASEADD + lobj.firstNOR + j, _nor);
+        if ( _nor > 63 ) {
+          _mode = 1;  // non-inverted test
+          _nor -= 64;
+        }
+        else {
+          _mode = 0;  // inverted test
+        }
+        if ( ( _state == 1 ) && ( TheSignalInputs.get(_nor) == _mode ) ) {
+          _state = 1;
+        }
+        else {
+          _state = 0;
         }
       }
-      if ( _occupancy == 1 ) {
-        TheSignals.set(i, 6);  // RED
-      }
-      else {
-        TheSignals.advanceSignal(i);        
+      if ( _state == 1 ) {
+        _intermediateState[lobj.signalNumber-1] = lobj.aspect;
       }
     }
   }
+  
+  for ( i = 0 ; i < 8 ; i++ ) {
+    if ( _intermediateState[i] == 0 ) {
+      _intermediateState[i] = 2;
+    }
+    _leadingState = TheSignals.getLeadingState(i);
+    if (( _leadingState < 6 ) && ( _intermediateState[i] > 6 )) {
+      _intermediateState[i] = 6;
+    }
+    else if (( _leadingState < 10 ) && ( _intermediateState[i] > 8 )) {
+      _intermediateState[i] = 8;
+    }
+    TheSignals.set(i,_intermediateState[i]);
+  }
 }
+
 // signal settings
 //  0 - Unknown
 //  1 - Dark
-//  2 - Green
-//  3 - Flashing Green
-//  4 - Yellow
-//  5 - Flashing Yellow
-//  6 - Red
-//  7 - Flashing Red
-//  8 - Lunar
-//  9 - Flashing Lunar
+//  2 - Red
+//  3 - Flashing Red
+//  4 - Lunar
+//  5 - Flashing Lunar
+//  6 - Yellow
+//  7 - Flashing Yellow
+//  8 - Green
+//  9 - Flashing Green
 #endif
 
 
@@ -1779,7 +1806,14 @@ void set_signals() {
 void eeprom_init() {
   int i;
   byte temp;
-
+  
+  for ( i = 16 ; i < 2048 ; i++ ) {
+    EEPROM.get(i, temp);
+    if ( temp == 255 ) {
+      EEPROM.update(i, byte(0));
+    }
+  }
+#if 0 
   EEPROM.get(6,temp);
   if ( temp == 255 ) {
     EEPROM.update(6,byte(0));
@@ -1826,7 +1860,7 @@ void eeprom_init() {
       EEPROM.update(SIGNAL_INPUT_BASEADD+i,byte(0));
     }
   }
-  
+ 
   
   for ( i = 0 ; i < 16*SIZE_OF_SIGNAL ; i++ ) {
     EEPROM.get(SIGNAL_BASEADD+i,temp);
@@ -1855,7 +1889,8 @@ void eeprom_init() {
       EEPROM.update(TRACKMAP_BASEADD+i,byte(0));
     }
   }
- 
+#endif
+
 }
 
 
@@ -1984,6 +2019,11 @@ void sdCardManager() {
     }
   }
 }
+
+///
+///  show_configuration()
+///    Called from the console "conf" command
+///
 
 void show_configuration() {
   int i;
@@ -2173,50 +2213,49 @@ void show_configuration() {
       Serial.println(val2.nameLabel); 
     }
   }
-//  544   553  Signal Input 1 [ 0 - signal ( 0 is off ) ; 1 - mode ( 0 is off, 1 is local turnout,
+//  544   552  Signal Input 1 [ 0 - mode ( 0 is off, 1 is local turnout,
 //                                2 is local turnout (reversed), 3 is local sensor, 4 is local
 //                                quad turnout sensor, 5 is remote turnout, 6 is remote turnout (reversed),
-//                                  7 is remote sensor ) ; 2 - local index, [3-9] remote name ]
-//  554   563   Signal Input 2
-//  564   573   Signal Input 3
-//  574   583   Signal Input 4
-//  584   593   Signal Input 5
-//  594   603   Signal Input 6
-//  604   613   Signal Input 7
-//  614   623   Signal Input 8
-//  624   633   Signal Input 9
-//  634   643   Signal Input 10
-//  644   653   Signal Input 11
-//  654   663   Signal Input 12
-//  664   673   Signal Input 13
-//  674   683   Signal Input 14
-//  684   693   Signal Input 15
-//  694   703   Signal Input 16
-//  704   713   Signal Input 17
-//  714   723   Signal Input 18
-//  724   733   Signal Input 19
-//  734   743   Signal Input 20
-//  744   753   Signal Input 21
-//  754   763   Signal Input 22
-//  764   773   Signal Input 23
-//  774   783   Signal Input 24
-//  784   793   Signal Input 25
-//  794   803   Signal Input 26
-//  804   813   Signal Input 27
-//  814   823   Signal Input 28
-//  824   833   Signal Input 29
-//  834   843   Signal Input 30
-//  844   853   Signal Input 31
-//  854   863   Signal Input 32
+//                                  7 is remote sensor; 8 is remote sensor inverted ) ; 
+//                              1 - local index; [2-8] remote name ]
+//  553   561   Signal Input 2
+//  562   570   Signal Input 3
+//  571   579   Signal Input 4
+//  580   588   Signal Input 5
+//  589   597   Signal Input 6
+//  598   606   Signal Input 7
+//  607   615   Signal Input 8
+//  616   624   Signal Input 9
+//  625   633   Signal Input 10
+//  634   642   Signal Input 11
+//  643   651   Signal Input 12
+//  652   660   Signal Input 13
+//  661   669   Signal Input 14
+//  670   678   Signal Input 15
+//  679   687   Signal Input 16
+//  688   696   Signal Input 17
+//  697   705   Signal Input 18
+//  706   714   Signal Input 19
+//  715   723   Signal Input 20
+//  724   732   Signal Input 21
+//  733   741   Signal Input 22
+//  742   750   Signal Input 23
+//  751   759   Signal Input 24
+//  760   768   Signal Input 25
+//  769   777   Signal Input 26
+//  778   786   Signal Input 27
+//  787   795   Signal Input 28
+//  796   804   Signal Input 29
+//  805   813   Signal Input 30
+//  814   822   Signal Input 31
+//  823   831   Signal Input 32
 
   for ( i = 0 ; i < 32 ; i++ ) {
     SignalInputObject sobj;
     EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*i, sobj);
-    if (( sobj.signalNumber != 0 ) && ( sobj.inputMode != 0 )) {
+    if ( sobj.inputMode != 0 ) {
       Serial.print("Sig Input ");
       Serial.print(i);
-      Serial.print(" signal ");
-      Serial.print(sobj.signalNumber);
       Serial.print(" mode ");
       Serial.print(sobj.inputMode);
       Serial.print(" index ");
@@ -2224,6 +2263,48 @@ void show_configuration() {
       if ( sobj.inputMode > 3 ) {
         Serial.print(" label ");
         Serial.print(sobj.inputName);
+      }
+      Serial.println();
+    }
+  }
+
+//  832   835   Signal Logic 1 [ 0 - signal (0 off) ; 1 - aspect ; 2 - first NOR ; 3 - number NORs ]
+//  836   839   Signal Logic 2
+//  840   843   Signal Logic 3
+//  844   847   Signal Logic 4
+//  848   851   Signal Logic 5
+//  852   855   Signal Logic 6
+//  856   859   Signal Logic 7
+//  860   863   Signal Logic 8
+//  864   867   Signal Logic 9
+//  868   871   Signal Logic 10
+//  872   875   Signal Logic 11
+//  876   879   Signal Logic 12
+//  880   883   Signal Logic 13
+//  884   887   Signal Logic 14
+//  888   891   Signal Logic 15
+//  892   895   Signal Logic 16
+
+// 1525  1588   NOR Data
+
+  for ( i = 0 ; i < 16 ; i++ ) {
+    SignalLogicObject lobj;
+    EEPROM.get(SIGNAL_LOGIC_BASEADD + SIZE_OF_SIGNAL_LOGIC*i, lobj);
+    if ( lobj.signalNumber != 0 ) {
+      Serial.print("Signal ");
+      Serial.print(lobj.signalNumber);
+      Serial.print(" Aspect ");
+      Serial.print(lobj.aspect);
+      Serial.print(" First NOR ");
+      Serial.print(lobj.firstNOR);
+      Serial.print(" Number NORs ");
+      Serial.print(lobj.numberNOR);
+      Serial.print(" NOR ");
+      for ( byte j = 0 ; j < lobj.numberNOR ; j++) {
+        byte tt;
+        EEPROM.get(NORDATA_BASEADD + lobj.firstNOR + j, tt);
+        Serial.print(tt);
+        Serial.print(" ");
       }
       Serial.println();
     }
@@ -2301,6 +2382,7 @@ void show_configuration() {
 //   dep/m aaaa XX-XX-XX-XX-XX-XX aaaa starting address XX - hex MAC address [6 bytes]
 //
 ///////////////////////////////////////////////////////////////////////////////
+
 void depositData() {
  int index1,index2,baseAdd;
  index1 = consoleBuffer.indexOf(" ");
@@ -2428,6 +2510,7 @@ byte hexToByte(char arg_char) {
 // I2C Utility
 //
 ///////////////////////////////////////////////////////////////////////////////
+
 void scan_i2c() {
   byte error, address;
   int nDevices;
@@ -2536,42 +2619,62 @@ void scan_i2c() {
 //  528   535   Sensor 15
 //  536   543   Sensor 16
 
-//  544   553	Signal Input 1 [ 0 - signal ( 0 is off ) ; 1 - mode ( 0 is off, 1 is local turnout,
+//  544   552  Signal Input 1 [ 0 - mode ( 0 is off, 1 is local turnout,
 //                                2 is local turnout (reversed), 3 is local sensor, 4 is local
 //                                quad turnout sensor, 5 is remote turnout, 6 is remote turnout (reversed),
-//                                  7 is remote sensor, 8 is invert remote sensor ) ; 2 - local index, [3-9] remote name ]
-//  554   563   Signal Input 2
-//  564	  573	  Signal Input 3
-//  574   583   Signal Input 4
-//  584   593   Signal Input 5
-//  594   603   Signal Input 6
-//  604   613   Signal Input 7
-//  614   623   Signal Input 8
-//  624   633   Signal Input 9
-//  634   643   Signal Input 10
-//  644   653   Signal Input 11
-//  654   663   Signal Input 12
-//  664   673   Signal Input 13
-//  674   683   Signal Input 14
-//  684   693   Signal Input 15
-//  694   703   Signal Input 16
-//  704   713   Signal Input 17
-//  714   723   Signal Input 18
-//  724   733   Signal Input 19
-//  734   743   Signal Input 20
-//  744   753   Signal Input 21
-//  754   763   Signal Input 22
-//  764   773   Signal Input 23
-//  774   783   Signal Input 24
-//  784   793   Signal Input 25
-//  794   803   Signal Input 26
-//  804   813   Signal Input 27
-//  814   823   Signal Input 28
-//  824   833   Signal Input 29
-//  834   843   Signal Input 30
-//  844   853   Signal Input 31
-//  854   863   Signal Input 32
-//  864   927	undefined
+//                                  7 is remote sensor ) ; 
+//                              1 - local index; [2-8] remote name ]
+//  553   561   Signal Input 2
+//  562   570   Signal Input 3
+//  571   579   Signal Input 4
+//  580   588   Signal Input 5
+//  589   597   Signal Input 6
+//  598   606   Signal Input 7
+//  607   615   Signal Input 8
+//  616   624   Signal Input 9
+//  625   633   Signal Input 10
+//  634   642   Signal Input 11
+//  643   651   Signal Input 12
+//  652   660   Signal Input 13
+//  661   669   Signal Input 14
+//  670   678   Signal Input 15
+//  679   687   Signal Input 16
+//  688   696   Signal Input 17
+//  697   705   Signal Input 18
+//  706   714   Signal Input 19
+//  715   723   Signal Input 20
+//  724   732   Signal Input 21
+//  733   741   Signal Input 22
+//  742   750   Signal Input 23
+//  751   759   Signal Input 24
+//  760   768   Signal Input 25
+//  769   777   Signal Input 26
+//  778   786   Signal Input 27
+//  787   795   Signal Input 28
+//  796   804   Signal Input 29
+//  805   813   Signal Input 30
+//  814   822   Signal Input 31
+//  823   831   Signal Input 32
+
+//  832   835   Signal Logic 1 [ 0 - signal (0 off) ; 1 - aspect ; 2 - first NOR ; 3 - number NORs ]
+//  836   839   Signal Logic 2
+//  840   843   Signal Logic 3
+//  844   847   Signal Logic 4
+//  848   851   Signal Logic 5
+//  852   855   Signal Logic 6
+//  856   859   Signal Logic 7
+//  860   863   Signal Logic 8
+//  864   867   Signal Logic 9
+//  868   871   Signal Logic 10
+//  872   875   Signal Logic 11
+//  876   879   Signal Logic 12
+//  880   883   Signal Logic 13
+//  884   887   Signal Logic 14
+//  888   891   Signal Logic 15
+//  892   895   Signal Logic 16
+
+//  896   927	undefined
+
 //  928   929   Indicator 1/1  [ 0 - switch number ; 1 - sensor number (if switch number is 0 ]
 //  930   931   Indicator 1/2
 //  932   933   Indicator 1/3
@@ -2580,9 +2683,13 @@ void scan_i2c() {
 //  938   939   Indicator 2/2
 //  940   941   Indicator 2/3
 //  942   943   Indicator 2/4
+
 //  944   959   RESERVED
+
 //  960   975   Track Power Saved State
+
 //  976  1023   RESERVED
+
 // 1024	 1039   KBTRACK TRACK 0
 // 1040  1055   KBTRACK TRACK 1
 // 1056  1071   KBTRACK TRACK 2
@@ -2599,7 +2706,9 @@ void scan_i2c() {
 // 1232  1247   KBTRACK TRACK 13
 // 1248  1265   KBTRACK TRACK 14
 // 1266  1281   KBTRACK TRACK 15
+
 // 1282  1299   RESERVED
+
 // 1300  1314   Signal 1/1 [ 0 - active ; [1-7] signalhead name ; 
 //                            [8-14] leading remote signalhead name ]
 // 1315  1329   Signal 1/2
@@ -2616,3 +2725,5 @@ void scan_i2c() {
 // 1480  1494   Signal 4/2
 // 1495  1509   Signal 4/3
 // 1510  1524   Signal 4/4
+
+// 1525  1588	NOR Data ( 64 bytes)  
