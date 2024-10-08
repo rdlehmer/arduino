@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-10-07 v0.7.4c";
+const char* const SW_VERSION = "2024-10-07 v0.7.4d";
 
 // Ron Lehmer
 //
@@ -1011,7 +1011,14 @@ class cmrs_signal {
     void init (byte arg) {
       _state = 0;
       _previousState = 0;
-      _leadingState = 0;
+      char tempstr[7];
+      EEPROM.get(SIGNAL_BASEADD + SIZE_OF_SIGNAL*arg + 8 , tempstr);
+      if ( strlen(tempstr) == 0 ) {  // if there is no leading signal defined
+        _leadingState = 10;			 // set this above the highest aspect available
+      }								 // this will keep signals from being dragged down by DARK indications
+      else {
+        _leadingState = 0;			 // otherwise default to UNKNOWN
+      }
       _channel = arg;
     }
     
