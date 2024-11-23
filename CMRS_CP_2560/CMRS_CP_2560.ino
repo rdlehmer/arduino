@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-10-07 v0.7.4d";
+const char* const SW_VERSION = "2024-11-22 v0.7.4e";
 
 // Ron Lehmer
 //
@@ -1024,45 +1024,44 @@ class cmrs_signal {
     
     void set(byte arg) {
       _state = arg;
-      if ( _channel < 4 ) {
-        if ( ( _state == 8 ) || (( _state == 9 ) && ( isTheFlasher == 0 )) ) {  // green or flashing green
+      if ( _channel < 4 ) {        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {  //red or flashing red
           signalA.digitalWrite(3*_channel, LOW);
         }
         else {
-          signalA.digitalWrite(3*_channel, HIGH);
-        }
-         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {  // yellow or flashing yellow
+          signalA.digitalWrite(3*_channel, HIGH); 
+        }      
+        if ( ( _state == 8 ) || (( _state == 9 ) && ( isTheFlasher == 0 )) ) {  // green or flashing green
           signalA.digitalWrite(3*_channel+1, LOW);
         }
         else {
           signalA.digitalWrite(3*_channel+1, HIGH);
         }
-         if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {  //red or flashing red
+        if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {  // yellow or flashing yellow
           signalA.digitalWrite(3*_channel+2, LOW);
         }
         else {
-          signalA.digitalWrite(3*_channel+2, HIGH); 
-        }      
+          signalA.digitalWrite(3*_channel+2, HIGH);
+        }
       }
       else {
-        if ( ( _state == 8 ) || (( _state == 9 ) && ( isTheFlasher == 0 )) ) {  // green or flashing green
+        if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {  // red or flashing red
           signalB.digitalWrite(3*(_channel - 4), LOW);
         }
         else {
-          signalB.digitalWrite(3*(_channel - 4), HIGH);
-        }
-         if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {  // yellow or flashing yellow
+          signalB.digitalWrite(3*(_channel - 4), HIGH); 
+        }       
+        if ( ( _state == 8 ) || (( _state == 9 ) && ( isTheFlasher == 0 )) ) {  // green or flashing green
           signalB.digitalWrite(3*(_channel - 4)+1, LOW);
         }
         else {
           signalB.digitalWrite(3*(_channel - 4)+1, HIGH);
         }
-         if ( ( _state == 2 ) || (( _state == 3 ) && ( isTheFlasher == 0 )) ) {  // red or flashing red
+        if ( ( _state == 6 ) || (( _state == 7 ) && ( isTheFlasher == 0 )) ) {  // yellow or flashing yellow
           signalB.digitalWrite(3*(_channel - 4)+2, LOW);
         }
         else {
-          signalB.digitalWrite(3*(_channel - 4)+2, HIGH); 
-        }       
+          signalB.digitalWrite(3*(_channel - 4)+2, HIGH);
+        }
       }
       if ( _state != _previousState ) {
 #ifdef NETWORK_SYSTEM
