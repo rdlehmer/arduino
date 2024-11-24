@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-11-22 v0.7.4e";
+const char* const SW_VERSION = "2024-11-24 v0.7.4f";
 
 // Ron Lehmer
 //
@@ -964,12 +964,9 @@ class CMRSsignalInputs {
       if (( arg >= 0 ) && ( arg < 32)) {
         if ( get(arg) == 2 ) {
           if ( ( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) ) {
-//            byte temp;
             EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg, siobj);
             if (( siobj.inputMode == 7 ) || ( siobj.inputMode == 8 )) {
-//              char tempstr[7];              
               String tempStr;
-//              EEPROM.get(SIGNAL_INPUT_BASEADD + SIZE_OF_SIGNAL_INPUT*arg+4, tempstr);
               tempStr = String(siobj.inputName);
               if ( tempStr.length() != 0 ) {
                 tempStr = String("SENSOR "+tempStr);
@@ -981,11 +978,13 @@ class CMRSsignalInputs {
             }
           }
         }
+        else if ( !(( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) ) {
+          set(arg, 2);
+        }
       }
     }
 #endif
-
-    
+ 
   private:
     cmrs_toggle signalInputs[32];
     cmrs_toggle prevInputs[32];
@@ -1146,6 +1145,9 @@ class cmrs_signal {
           Serial.println(tempStr);
           if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
         }
+      }
+      else {
+        _leadingState = 0;  // reset leading signal state to unknown if there is no network
       }    
     }
 #endif
@@ -1239,9 +1241,10 @@ class CMRSsignals {
       if ( _boards > 0 ) {
         if (( arg >= 0 ) && ( arg < 4*_boards )) {
           signal[arg].sendUpdate();
-          if ( signal[arg].getLeadingState() == 0 ) {
-            signal[arg].sendLeadingUpdate();
-          }
+          signal[arg].sendLeadingUpdate();
+//          if ( signal[arg].getLeadingState() == 0 ) {
+//            signal[arg].sendLeadingUpdate();
+//          }
         }
       }
     }
@@ -1727,7 +1730,7 @@ byte signalAspectToCode(String arg) {
 ///
 /// set_signals()
 ///   Scans the list of signal logic methods 
-///   Assume the signal will be red unless one of these strings of NAD terms is TRUE
+///   Assume the signal will be red unless one of these strings of NOR terms is TRUE
 ///   Multiple logic strings can be defined for a signal - last set of terms that is TRUE has priority
 ///   Then check if there are any restrictions from a leading signal 
 ///   
