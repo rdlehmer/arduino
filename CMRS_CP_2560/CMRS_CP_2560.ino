@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-11-24 v0.7.4f";
+const char* const SW_VERSION = "2024-11-29 v0.7.4hi";
 
 // Ron Lehmer
 //
@@ -55,7 +55,7 @@ const char* const SW_VERSION = "2024-11-24 v0.7.4f";
 #define SIGNAL_BASEADD 1300
 #define SIZE_OF_SIGNAL 15
 
-#define NORDATA_BASEADD 1525
+#define NORDATA_BASEADD 1540  // hot fix for 0.7.4g
 #define SIZE_OF_NORDATA 1
 
 #define INDICATOR_BASEADD 928
@@ -1134,7 +1134,7 @@ class cmrs_signal {
     
     void sendLeadingUpdate() {
       char tempstr[7];
-      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) && ( _leadingState == 0 )) {
         String tempStr;
         EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*(_channel)+8,tempstr);
         tempStr = String(tempstr);
@@ -1226,13 +1226,15 @@ class CMRSsignals {
       byte _leadingState;
       byte _newState;
       _leadingState = getLeadingState(arg_i);
-
+#if 1
       if ( _leadingState < 6 ) { // red or lunar
         _newState = 6;			 // set yellow
       }
       else if ( _leadingState < 10 ) {  // yellow or green
         _newState = 8;					// set green
       }
+#endif
+
       set(arg_i, _newState);
     }
     
@@ -1782,11 +1784,30 @@ void set_signals() {
       _intermediateState[i] = 2;
     }
     _leadingState = TheSignals.getLeadingState(i);
+#if 0
     if (( _leadingState < 6 ) && ( _intermediateState[i] > 6 )) {
       _intermediateState[i] = 6;
     }
     else if (( _leadingState < 10 ) && ( _intermediateState[i] > 8 )) {
       _intermediateState[i] = 8;
+    }
+#endif
+    if ( _leadingState < 8 ) {				// If leading signal is active and not Fl Green or Green
+      if ( _leadingState > 6 ) {				// If leading signal Fl Yellow
+        if ( _intermediateState[i] > 8 ) {      //   then if signal could be Fl Green
+          _intermediateState[i] = 8;			//    then set signal to Green
+        }
+      }
+      else if ( _leadingState > 5 ) {           // If leading signal Yellow
+        if ( _intermediateState[i] > 7 ) {      //   then if signal could be Fl Green or Green
+          _intermediateState[i] = 7;            //     then set signal to Fl Yellow
+        }    
+      }
+      else if ( _leadingState > 1 ) {           // If leading signal Fl Lunar, Lunar, Fl Red, or Red
+        if ( _intermediateState[i] > 6 ) {      //   then if signal could be Fl Green, Green, of Fl Yellow
+          _intermediateState[i] = 6;            //     then set signal to Yellow
+        }    
+      }
     }
     TheSignals.set(i,_intermediateState[i]);
   }
@@ -2713,10 +2734,10 @@ void scan_i2c() {
 // 1200  1215   KBTRACK TRACK 11
 // 1216  1231   KBTRACK TRACK 12
 // 1232  1247   KBTRACK TRACK 13
-// 1248  1265   KBTRACK TRACK 14
-// 1266  1281   KBTRACK TRACK 15
+// 1248  1263   KBTRACK TRACK 14
+// 1264  1279   KBTRACK TRACK 15
 
-// 1282  1299   RESERVED
+// 1280  1299   RESERVED
 
 // 1300  1314   Signal 1/1 [ 0 - active ; [1-7] signalhead name ; 
 //                            [8-14] leading remote signalhead name ]
@@ -2729,10 +2750,11 @@ void scan_i2c() {
 // 1405  1419   Signal 2/4
 // 1420  1434   Signal 3/1
 // 1435  1449   Signal 3/2
-// 1450  1464   Signal 3/4
-// 1465  1479   Signal 4/1
-// 1480  1494   Signal 4/2
-// 1495  1509   Signal 4/3
-// 1510  1524   Signal 4/4
+// 1450  1464   Signal 3/3
+// 1465  1479   Signal 3/4
+// 1480  1494   Signal 4/1
+// 1495  1509   Signal 4/2
+// 1510  1524   Signal 4/3
+// 1525  1539   Signal 4/4
 
-// 1525  1588	NOR Data ( 64 bytes)  
+// 1540  1603	NOR Data ( 64 bytes)  
