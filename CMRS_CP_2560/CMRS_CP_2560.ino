@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-11-29 v0.7.4hi";
+const char* const SW_VERSION = "2024-11-29 v0.7.4j";
 
 // Ron Lehmer
 //
@@ -950,7 +950,7 @@ class CMRSsignalInputs {
     
     void set(int arg_i, byte arg_val) {
       signalInputs[arg_i].set(arg_val);
-#ifdef DBGLVLS
+#if 0
       Serial.print("SignalInputs ");
       Serial.print(arg_i);
       Serial.print(" = ");
@@ -1071,6 +1071,10 @@ class cmrs_signal {
     }
     
     void setLeadingState(byte _arg) {
+#ifdef DBGLVLS
+      Serial.print(" setLeadingState: ");
+      Serial.println( _arg );
+#endif
       _leadingState = _arg;
     }
     
@@ -1134,16 +1138,18 @@ class cmrs_signal {
     
     void sendLeadingUpdate() {
       char tempstr[7];
-      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 ) && ( _leadingState == 0 )) {
-        String tempStr;
-        EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*(_channel)+8,tempstr);
-        tempStr = String(tempstr);
-        if ( tempStr.length() != 0 ) {
-          tempStr = String("SIGNALHEAD "+String(tempstr));
-          tempStr = String(tempStr + " UNKNOWN");
-          Serial.print("Send: ");
-          Serial.println(tempStr);
-          if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+      if (( TheEthernetClient.connected() ) && ( bsIsJmriRunning == 1 )) {
+        if ( _leadingState == 0 ) {
+          String tempStr;
+          EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*(_channel)+8,tempstr);
+          tempStr = String(tempstr);
+          if ( tempStr.length() != 0 ) {
+            tempStr = String("SIGNALHEAD "+String(tempstr));
+            tempStr = String(tempStr + " UNKNOWN");
+            Serial.print("Send: ");
+            Serial.println(tempStr);
+            if (TheEthernetClient.connected()) TheEthernetClient.println(tempStr);
+          }
         }
       }
       else {
@@ -1219,9 +1225,16 @@ class CMRSsignals {
     }
     
     void setLeadingState(int arg_i, byte arg_val) {
+#ifdef DBGLVLS
+      Serial.print("CMRSsignals::setLeading State: ");
+      Serial.print( arg_i );
+      Serial.print( " " );
+      Serial.println( arg_val );
+#endif
       signal[arg_i].setLeadingState(arg_val);
     }
-    
+
+#if 0    
     void advanceSignal(int arg_i) {
       byte _leadingState;
       byte _newState;
@@ -1234,14 +1247,18 @@ class CMRSsignals {
         _newState = 8;					// set green
       }
 #endif
-
       set(arg_i, _newState);
     }
+#endif
     
 #ifdef NETWORK_SYSTEM
     void sendSignalsStatus(int arg) {
       if ( _boards > 0 ) {
         if (( arg >= 0 ) && ( arg < 4*_boards )) {
+#ifdef DBGLVLS
+          Serial.print("CMRSsignals::sendSignalStatus ");
+          Serial.println( arg );
+#endif
           signal[arg].sendUpdate();
           signal[arg].sendLeadingUpdate();
 //          if ( signal[arg].getLeadingState() == 0 ) {
@@ -1666,6 +1683,10 @@ void processCommandBuffer() {
       EEPROM.get(SIGNAL_BASEADD+SIZE_OF_SIGNAL*i,sobj);
       tempStr = String(sobj.leadingSignalHead);
       if ( tempStr == cmdLabel ) {
+#ifdef DBGLVLS
+        Serial.print("processCommandBuffer: ");
+        Serial.println( command );
+#endif        
         TheSignals.setLeadingState(i,signalAspectToCode(command));
       }
     }  
