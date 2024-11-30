@@ -1,5 +1,5 @@
 
-const char* const SW_VERSION = "2024-11-30 v0.7.5";
+const char* const SW_VERSION = "2024-11-30 v0.7.6";
 
 // Ron Lehmer
 //
