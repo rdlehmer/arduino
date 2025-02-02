@@ -71,6 +71,7 @@ int getData()
 }
 
 
+
 int main(int argc, char* argv[])
 {
     std::cout << "Number of arguments " << argc << std::endl;
@@ -94,6 +95,8 @@ int main(int argc, char* argv[])
     TheConfig.printKBTrack();
 
     std::cout << "Continue...";
+
+    TheConfig.writeData();
     
  //   std::string cmdIn;
  //   std::cin >> cmdIn;
