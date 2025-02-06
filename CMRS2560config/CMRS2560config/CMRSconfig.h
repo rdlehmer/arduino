@@ -68,15 +68,19 @@ public:
 
 	void printMacAddr();
 	void writeMacAddr();
+	void setMacAddr(int arg[]);
 
 	void printIpAddr();
 	void writeIpAddr();
+	void setIpAddr(int arg[]);
 
 	void printServerIpAddr();
 	void writeServerIpAddr();
+	void setServerIpAddr(int arg[]);
 
 	void printBoards();
 	void writeBoards();
+	void setBoard(int, int);
 
 	void writePositions();
 

@@ -259,7 +259,7 @@ void CMRSconfig::printMacAddr() {
 	std::cout << std::hex;
 	std::cout << "Mac Address ";
 	for (int i = 0; i < CMRS_MACADDR_SIZE-1; i++) {
-		std::cout << macaddr[i] << " - ";
+		std::cout << macaddr[i] << "-";
 	}
 	std::cout << macaddr[CMRS_MACADDR_SIZE-1] << std::dec << std::endl;
 }
@@ -267,6 +267,12 @@ void CMRSconfig::printMacAddr() {
 void CMRSconfig::writeMacAddr() {
 	for (int i = 0; i < CMRS_MACADDR_SIZE; i++) {
 		outfile << i << " " << macaddr[i] << std::endl;
+	}
+}
+
+void CMRSconfig::setMacAddr(int arg[]) {
+	for (int i = 0; i < 6; i++) {
+		macaddr[i] = arg[i];
 	}
 }
 
@@ -284,6 +290,12 @@ void CMRSconfig::writeIpAddr() {
 	}
 }
 
+void CMRSconfig::setIpAddr(int arg[]) {
+	for (int i = 0; i < 4; i++) {
+		ipaddr[i] = arg[i];
+	}
+}
+
 void CMRSconfig::printServerIpAddr() {
 	std::cout << "Server IP   ";
 	for (int i = 0; i < CMRS_SIPADDR_SIZE-1; i++) {
@@ -295,6 +307,12 @@ void CMRSconfig::printServerIpAddr() {
 void CMRSconfig::writeServerIpAddr() {
 	for (int i = 0; i < CMRS_SIPADDR_SIZE; i++) {
 		outfile << (CMRS_SIPADDR_OFFSET + i) << " " << serveripaddr[i] << std::endl;
+	}
+}
+
+void CMRSconfig::setServerIpAddr(int arg[]) {
+	for (int i = 0; i < 4; i++) {
+		serveripaddr[i] = arg[i];
 	}
 }
 
@@ -313,6 +331,10 @@ void CMRSconfig::writeBoards() {
 	for (int i = 0; i < CMRS_BOARDS_SIZE; i++) {
 		outfile << (CMRS_BOARDS_OFFSET + i) << " " << boards[i] << std::endl;
 	}
+}
+
+void CMRSconfig::setBoard(int index, int val) {
+	boards[index] = val;
 }
 
 void CMRSconfig::writePositions() {
