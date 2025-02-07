@@ -375,6 +375,11 @@ void CMRSconfig::writeQuadTurnouts() {
 	}
 }
 
+void CMRSconfig::setQuadTurnout(int channel, int toggle, std::string turnoutName) {
+	quadTurnout[channel].set_toggle(toggle);
+	quadTurnout[channel].set_name(turnoutName);
+}
+
 void CMRSconfig::printQuadSensors() {
 	std::cout << "Quad Sensors:" << std::endl;
 	for (int i = 0; i < 16; i++) {

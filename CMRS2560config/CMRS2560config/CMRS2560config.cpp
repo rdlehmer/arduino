@@ -229,7 +229,65 @@ void setBoard() {
 }
 
 void setTurnout() {
+    int board = 0;
+    int channel = 0;
+    int toggle = -1;
+    char arg_in[256];
+    char* pch;
 
+    std::string arg = " ";
+    std::string turnoutname;
+
+    std::cin.getline(arg_in, 256);
+    std::cout << arg_in << std::endl;
+    
+    pch = strtok(arg_in, " ");
+    while ( pch != NULL ) {
+        arg = std::string(pch);
+        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            arg = std::string(pch);
+            board = std::stoi(arg, nullptr, 10);
+            if (board == 0) {
+                std::cout << "%%setTurnout - syntax error" << std::endl;
+                return;
+            }
+        }
+
+        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            arg = std::string(pch); 
+            channel = std::stoi(arg, nullptr, 10);
+            if (channel == 0) {
+                std::cout << "%%setTurnout - syntax error" << std::endl;
+                return;
+            }
+        }
+
+        if (arg.compare(0, 2, "name", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            turnoutname = std::string(pch);
+        }
+
+        if (arg.compare(0, 2, "toggle", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            arg = std::string(pch);
+            toggle = std::stoi(arg, nullptr, 10);
+            if (toggle == -1) {
+                std::cout << "%%setTurnout - syntax error" << std::endl;
+                return;
+            }
+        }
+        pch = strtok(NULL, " ");
+    }
+    if ((board != 0) && (channel != 0) && (toggle != -1) && (turnoutname.length() != 0)) {
+        TheConfig.setQuadTurnout(4 * (board-1) + channel-1, toggle, turnoutname);
+    }
+    else {
+        std::cout << "%%setTurnout - syntax error" << std::endl;
+        return;
+    }
+    
 }
 
 void setDataDispatcher() {
@@ -250,7 +308,6 @@ void setDataDispatcher() {
     }
     else if (arg.compare(0, 2, "turnout", 0, 2) == 0) {
         setTurnout();
-//        TheConfig.printQuadTurnouts();
     }
     else if (arg.compare(0, 2, "qsensors", 0, 2) == 0) {
 //        TheConfig.printQuadSensors();

@@ -86,6 +86,7 @@ public:
 
 	void printQuadTurnouts();
 	void writeQuadTurnouts();
+	void setQuadTurnout(int, int, std::string);
 
 	void printQuadSensors();
 	void writeQuadSensors();
