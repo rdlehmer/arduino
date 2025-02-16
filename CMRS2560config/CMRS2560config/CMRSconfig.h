@@ -90,30 +90,36 @@ public:
 
 	void printQuadSensors();
 	void writeQuadSensors();
+	void setQuadSensor(int, int, int, std::string);
 
 	void printDualTurnouts();
 	void writeDualTurnouts();
 
 	void printSensors();
 	void writeSensors();
+	void setSensor(int, int, std::string);
 
 	void printSignalInputs();
 	void writeSignalInputs();
+	void setSignalInput(int, int, int, std::string);
 
 	void printSignalLogic();
 	void writeSignalLogic();
+	void setSignalLogic(int, int, int, int[]);
 
 	void printIndicators();
 	void writeIndicators();
+	void setIndicator(int, int, int);
 
 	void writePower();
 
 	void printKBTrack();
 	void writeKBTrack();
+	void setKeyboard(int, int[]);
 
 	void printSignals();
 	void writeSignals();
-
+	void setSignal(int, int, std::string, std::string);
 	void writeNOR();
 
 private:

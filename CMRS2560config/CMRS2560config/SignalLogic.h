@@ -16,12 +16,14 @@ public:
 	void set_numNOR(int);
 
 	void add_NOR(int,int);
+	void clear_NOR();
 
 	int get_signal();
 	int get_aspect();
 	int get_firstNOR();
 	int get_numNOR();
 	int get_NOR(int);
+
 
 private:
 	int signal;

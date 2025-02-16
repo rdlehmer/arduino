@@ -63,3 +63,7 @@ int SignalLogic::get_NOR(int index)
 	int ret_val = NOR[index];
 	return ret_val;
 }
+
+void SignalLogic::clear_NOR() {
+	NOR.clear();
+}

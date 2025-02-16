@@ -413,6 +413,14 @@ void CMRSconfig::writeQuadSensors() {
 	}
 }
 
+
+void CMRSconfig::setQuadSensor(int arg_board, int arg_channel, int arg_sensor, std::string arg_sensorName) {
+	quadSensor[arg_sensor].set_board(arg_board);
+	quadSensor[arg_sensor].set_sensor(arg_channel);
+	quadSensor[arg_sensor].set_name(arg_sensorName);
+	quadSensor[arg_sensor].set_sensornum(arg_sensor);
+}
+
 void CMRSconfig::printDualTurnouts() {
 	if (boards[5] != 0) {
 		std::cout << "Dual Turnouts:" << std::endl;
@@ -471,13 +479,49 @@ void CMRSconfig::writeSensors() {
 	}
 }
 
+void CMRSconfig::setSensor(int board, int channel, std::string sensorName) {
+	int i = (board - 1) * 4 + (channel - 1);
+	sensor[i].set_toggle(i);
+	sensor[i].set_name(sensorName);
+}
+
 void CMRSconfig::printSignalInputs() {
 	std::cout << "Signal Inputs:" << std::endl;
 	for (int i = 0; i < 32; i++) {
 		if (signalInput[i].get_mode() != 0) {
-			std::cout << "  Input " << i << " Mode " << signalInput[i].get_mode();
-			std::cout << " Index " << signalInput[i].get_index();
-			std::cout << " Name " << signalInput[i].get_name() << std::endl;
+//			std::cout << "  Input " << i << " Mode " << signalInput[i].get_mode();
+//			std::cout << " Index " << signalInput[i].get_index();
+//			std::cout << " Name " << signalInput[i].get_name() << std::endl;
+
+			std::cout << "  Input " << i << " True If ";
+			switch (signalInput[i].get_mode()) {
+			case 1: std::cout << "Local Turnout Closed ";
+				break;
+			case 2: std::cout << "Local Turnout Thrown ";
+				break;
+			case 3: std::cout << "Local Sensor ";
+				break;
+			case 4: std::cout << "Local Quad Sensor # ";
+				break;
+			case 5: std::cout << "Remote Turnout Closed ";
+				break;
+			case 6: std::cout << "Remote Turnout Thrown ";
+				break;
+			case 7: std::cout << "Remote Sensor Active ";
+				break;
+			case 8: std::cout << "Remote Sensor Inactive ";
+				break;
+			default: std::cout << "ERROR";
+				break;
+			}
+			std::cout << "(Mode " << signalInput[i].get_mode() << ") ";
+			if (signalInput[i].get_mode() < 5) {
+				std::cout << "# " << signalInput[i].get_index();
+			}
+			else {
+				std::cout << signalInput[i].get_name();
+			}
+			std::cout << std::endl;
 		}
 	}
 }
@@ -500,6 +544,12 @@ void CMRSconfig::writeSignalInputs() {
 			sindex++;
 		}
 	}
+}
+
+void CMRSconfig::setSignalInput(int arg_number, int arg_mode, int arg_index, std::string arg_remotename) {
+	signalInput[arg_number].set_mode(arg_mode);
+	signalInput[arg_number].set_index(arg_index);
+	signalInput[arg_number].set_name(arg_remotename);
 }
 
 void CMRSconfig::printSignalLogic() {
@@ -548,6 +598,47 @@ void CMRSconfig::writeSignalLogic() {
 	}
 }
 
+
+void CMRSconfig::setSignalLogic(int arg_signal, int arg_aspect, int arg_nnor, int arg_NOR[]) {
+	int ifound = 0;
+	int iNum = -1;
+	for (int i = 0; i < CMRS_SIGNALLOGIC_NUMBER; i++) {
+		int _signal = signalLogic[i].get_signal();
+		int aspect = signalLogic[i].get_aspect();
+		if ((_signal != 0) && (aspect != 0)) {
+			iNum=i;
+		}
+		if ((_signal == arg_signal) && (aspect == arg_aspect)) {
+			ifound = 1;
+			signalLogic[i].clear_NOR();
+			for (int j = 0; j < arg_nnor; j++) {
+				signalLogic[i].add_NOR(j, arg_NOR[j]);
+			}
+			signalLogic[i].set_firstNOR(-1);
+			signalLogic[i].set_numNOR(arg_nnor);
+		}
+	}
+	// otherwise figure out where to start the vector and populate
+	if (ifound == 0) {
+		iNum++;
+		signalLogic[iNum].set_signal(arg_signal);
+		signalLogic[iNum].set_aspect(arg_aspect);
+		signalLogic[iNum].set_firstNOR(-1);
+		signalLogic[iNum].set_numNOR(arg_nnor);
+		for (int j = 0; j < arg_nnor; j++) {
+			signalLogic[iNum].add_NOR(j, arg_NOR[j]);
+		}
+	}
+	//pack 
+	int istart = 0;
+	for (int i = 0; i < CMRS_SIGNALLOGIC_NUMBER; i++) {
+		if ((signalLogic[i].get_signal() != 0) && (signalLogic[i].get_aspect() != 0)) {
+			signalLogic[i].set_firstNOR(istart);
+			istart += signalLogic[i].get_numNOR();
+		}
+	}
+}
+
 void CMRSconfig::printIndicators() {
 	std::cout << "Indicators:" << std::endl;
 	for (int i = 0; i < 8; i++) {
@@ -563,6 +654,20 @@ void CMRSconfig::writeIndicators() {
 		sindex++;
 		outfile << sindex << " " << indicator[i].get_sensor() << std::endl;
 		sindex++;
+	}
+}
+
+void CMRSconfig::setIndicator(int _channel, int _switch, int _sensor) {
+	if ((_switch != 0) && (_sensor != 0)) {
+		return;
+	}
+	if (_switch != 0) {
+		indicator[_channel].set_switch(_switch);
+		indicator[_channel].set_sensor(0);
+	}
+	else if (_sensor != 0) {
+		indicator[_channel].set_switch(0);
+		indicator[_channel].set_sensor(_sensor);
 	}
 }
 
@@ -592,6 +697,12 @@ void CMRSconfig::writeKBTrack() {
 			outfile << sindex << " " << kbTrack[i].get_mode(j) << std::endl;
 			sindex++;
 		}
+	}
+}
+
+void CMRSconfig::setKeyboard(int arg_track, int arg_output[]) {
+	for (int i = 0; i < 16; i++) {
+		kbTrack[arg_track].set_mode(i, arg_output[i]);
 	}
 }
 
@@ -631,6 +742,13 @@ void CMRSconfig::writeSignals() {
 			sindex++;
 		}
 	}
+}
+
+void CMRSconfig::setSignal(int arg_board, int arg_channel, std::string arg_signalname, std::string arg_leadingsignalname) {
+	int i = (arg_board - 1) * 4 + (arg_channel - 1);
+	signal[i].set_active(i);
+	signal[i].set_signalhead(arg_signalname);
+	signal[i].set_leadingsignal(arg_leadingsignalname);
 }
 
 void CMRSconfig::writeNOR() {
