@@ -484,7 +484,7 @@ void setSignal() {
         pch = strtok(NULL, " ");
     }
     if ((board != 0) && (channel != 0) && (signalname.length() != 0) &&
-        (channel > 0) && (channel < 5) && (board > 0) && (board < 2)) {
+        (channel > 0) && (channel < 5) && (board > 0) && (board < 3)) {
         TheConfig.setSignal(board, channel, signalname, leadingsignalname);
     }
     else {
@@ -805,6 +805,129 @@ void deleteTurnout() {
 
 }
 
+void deleteQsensor() {
+    int board = 0;
+    int channel = 0;
+    char arg_in[256];
+    char* pch;
+
+    std::string arg = " ";
+
+    std::cin.getline(arg_in, 256);
+
+    pch = strtok(arg_in, " ");
+    while (pch != NULL) {
+        arg = std::string(pch);
+        channel = std::stoi(arg, nullptr, 10);
+        if (channel == 0) {
+            std::cout << "%%deleteQsensor - syntax error" << std::endl;
+            return;
+        }
+        pch = strtok(NULL, " ");
+    }
+    if (channel != 0) {
+        TheConfig.deleteQuadSensor(channel);
+    }
+    else {
+        std::cout << "%%deleteQsensor - syntax error" << std::endl;
+        return;
+    }
+
+}
+
+void deleteSensor() {
+    int board = 0;
+    int channel = 0;
+    char arg_in[256];
+    char* pch;
+
+    std::string arg = " ";
+
+    std::cin.getline(arg_in, 256);
+
+    pch = strtok(arg_in, " ");
+    while (pch != NULL) {
+        arg = std::string(pch);
+        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            arg = std::string(pch);
+            board = std::stoi(arg, nullptr, 10);
+            if (board == 0) {
+                std::cout << "%%deleteSensor - syntax error" << std::endl;
+                return;
+            }
+        }
+
+        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            arg = std::string(pch);
+            channel = std::stoi(arg, nullptr, 10);
+            if (channel == 0) {
+                std::cout << "%%deleteSensor - syntax error" << std::endl;
+                return;
+            }
+        }
+
+        pch = strtok(NULL, " ");
+    }
+    if ((board != 0) && (channel != 0) &&
+        (channel > 0) && (channel < 5) && (board > 0) && (board < 3)) {
+        TheConfig.setSensor(board, channel, "");
+    }
+    else {
+        std::cout << "%%deleteSensor - syntax error" << std::endl;
+        return;
+    }
+
+}
+
+void deleteSignal() {
+    int board = 0;
+    int channel = 0;
+    char arg_in[256];
+    char* pch;
+
+    std::string arg = " ";
+
+    std::cin.getline(arg_in, 256);
+
+    pch = strtok(arg_in, " ");
+    while (pch != NULL) {
+        arg = std::string(pch);
+        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            arg = std::string(pch);
+            board = std::stoi(arg, nullptr, 10);
+            if (board == 0) {
+                std::cout << "%%deleteSignal - syntax error" << std::endl;
+                return;
+            }
+        }
+
+        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+            pch = strtok(NULL, " ");
+            arg = std::string(pch);
+            channel = std::stoi(arg, nullptr, 10);
+            if (channel == 0) {
+                std::cout << "%%deleteSignal - syntax error" << std::endl;
+                return;
+            }
+        }
+
+        pch = strtok(NULL, " ");
+    }
+    if ((board != 0) && (channel != 0) &&
+        (channel > 0) && (channel < 5) && (board > 0) && (board < 3)) {
+        TheConfig.deleteSignal(board, channel);
+    }
+    else {
+        std::cout << "%%deleteSignal - syntax error" << std::endl;
+        return;
+    }
+
+}
+
+
 void setDataDispatcher() {
     std::string arg;
     std::cin >> arg;
@@ -860,6 +983,15 @@ void deleteDataDispatcher() {
     if (arg.compare(0, 2, "turnout", 0, 2) == 0) {
         deleteTurnout();
     }
+    else if (arg.compare(0, 2, "qsensor", 0, 2) == 0) {
+        deleteQsensor();
+    }
+    else if (arg.compare(0, 2, "sensor", 0, 2) == 0) {
+        deleteSensor();
+    }
+    else if (arg.compare(0, 2, "signal", 0, 2) == 0) {
+        deleteSignal();
+    }
 }
 
 void printHelp() {
@@ -874,12 +1006,15 @@ void printHelp() {
     std::cout << "  set qsensor board (1..4) channel (1..8) sensor (1..16) name ISxxxx" << std::endl;
     std::cout << "  set dual board (1..2) channel (1..2) toggle xx name NTxxxx" << std::endl;
     std::cout << "  set sensor board (1..2) channel (1..4) name ISxxxx" << std::endl;
-    std::cout << "  set signal " << std::endl;
+    std::cout << "  set signal board (1..2) channel (1..4) name NTxxxx head NTxxxx" << std::endl;
     std::cout << "  set inputs " << std::endl;
     std::cout << "  set logic " << std::endl;
     std::cout << "  set indicator board (1..2) channel (1..4) [switch|sensor] xx" << std::endl;
     std::cout << "  set keyboard track (0..15) on (select up to 16 channels)" << std::endl;
     std::cout << "  delete turnout board (1..4) channel (1..4)" << std::endl;
+    std::cout << "  delete qsensor xx" << std::endl;
+    std::cout << "  delete sensor board (1..2) channel (1..4)" << std::endl;
+    std::cout << "  delete signal board (1..2) channel (1..4)" << std::endl;
 
 }
 

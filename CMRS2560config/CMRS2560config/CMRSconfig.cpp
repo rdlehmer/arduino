@@ -421,6 +421,17 @@ void CMRSconfig::setQuadSensor(int arg_board, int arg_channel, int arg_sensor, s
 	quadSensor[arg_sensor].set_sensornum(arg_sensor);
 }
 
+void CMRSconfig::deleteQuadSensor(int arg_channel) {
+	for (int i = 0; CMRS_QUADSENSOR_NUMBER; i++) {
+		if (quadSensor[i].get_sensornum() == arg_channel) {
+			quadSensor[i].set_board(0);
+			quadSensor[i].set_sensor(0);
+			quadSensor[i].set_name("");
+			quadSensor[i].set_sensornum(0);
+		}
+	}
+}
+
 void CMRSconfig::printDualTurnouts() {
 	if (boards[5] != 0) {
 		std::cout << "Dual Turnouts:" << std::endl;
@@ -710,7 +721,8 @@ void CMRSconfig::printSignals() {
 	std::cout << "Signals:" << std::endl;
 	for (int i = 0; i < 16; i++) {
 		if (signal[i].get_active() != 0) {
-			std::cout << "  Signal " << signal[i].get_active() << " Name " << signal[i].get_signalhead();
+			std::cout << "  Signal " << signal[i].get_active() << " ";
+			std::cout << (i/4)+1 << "/" << (i%4)+1 << " Name " << signal[i].get_signalhead();
 			std::cout << " Lead Signal " << signal[i].get_leadingsignal() << std::endl;
 		}
 	}
@@ -749,6 +761,13 @@ void CMRSconfig::setSignal(int arg_board, int arg_channel, std::string arg_signa
 	signal[i].set_active(i);
 	signal[i].set_signalhead(arg_signalname);
 	signal[i].set_leadingsignal(arg_leadingsignalname);
+}
+
+void CMRSconfig::deleteSignal(int arg_board, int arg_channel) {
+	int i = (arg_board - 1) * 4 + (arg_channel - 1);
+	signal[i].set_active(0);
+	signal[i].set_signalhead("");
+	signal[i].set_leadingsignal("");
 }
 
 void CMRSconfig::writeNOR() {

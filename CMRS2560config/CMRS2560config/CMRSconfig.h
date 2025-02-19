@@ -91,6 +91,7 @@ public:
 	void printQuadSensors();
 	void writeQuadSensors();
 	void setQuadSensor(int, int, int, std::string);
+	void deleteQuadSensor(int);
 
 	void printDualTurnouts();
 	void writeDualTurnouts();
@@ -120,6 +121,8 @@ public:
 	void printSignals();
 	void writeSignals();
 	void setSignal(int, int, std::string, std::string);
+	void deleteSignal(int, int);
+
 	void writeNOR();
 
 private:
