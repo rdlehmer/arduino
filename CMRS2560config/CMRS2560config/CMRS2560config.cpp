@@ -1007,14 +1007,16 @@ void printHelp() {
     std::cout << "  set dual board (1..2) channel (1..2) toggle xx name NTxxxx" << std::endl;
     std::cout << "  set sensor board (1..2) channel (1..4) name ISxxxx" << std::endl;
     std::cout << "  set signal board (1..2) channel (1..4) name NTxxxx head NTxxxx" << std::endl;
-    std::cout << "  set inputs " << std::endl;
-    std::cout << "  set logic " << std::endl;
+    std::cout << "  set inputs number xx mode (1..9) [index xx | name XXxxxx]" << std::endl;
+    std::cout << "  set logic signal xx aspect (flashing) [dark|red|lunar|yellow|green] (on xx / off xx)" << std::endl;
     std::cout << "  set indicator board (1..2) channel (1..4) [switch|sensor] xx" << std::endl;
     std::cout << "  set keyboard track (0..15) on (select up to 16 channels)" << std::endl;
     std::cout << "  delete turnout board (1..4) channel (1..4)" << std::endl;
     std::cout << "  delete qsensor xx" << std::endl;
     std::cout << "  delete sensor board (1..2) channel (1..4)" << std::endl;
     std::cout << "  delete signal board (1..2) channel (1..4)" << std::endl;
+    std::cout << "  delete input xx" << std::endl;
+    std::cout << "  delete logic" << std::endl;
 
 }
 
