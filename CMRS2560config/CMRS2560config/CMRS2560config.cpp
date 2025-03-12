@@ -5,7 +5,20 @@
 #include <iostream>
 #include <stdio.h>
 #include <string>
+#include <algorithm>
+#include <cctype>
+
+#ifdef _WIN32
+#include <direct.h>
+#define mkdir _mkdir
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+#include <errno.h>
+
 #include "CMRSconfig.h"
+
 
 CMRSconfig TheConfig;
 
@@ -14,31 +27,31 @@ std::string getSignalAspect(int arg)
     std::string ret_val;
     switch (arg) {
     case 1:
-        ret_val = "Dark";
+        ret_val = "DARK";
         break;
     case 2:
-        ret_val = "Red";
+        ret_val = "RED";
         break;
     case 3:
-        ret_val = "Flashing Red";
+        ret_val = "FLASHING RED";
         break;
     case 4:
-        ret_val = "Lunar";
+        ret_val = "LUNAR";
         break;
     case 5:
-        ret_val = "Flashing Lunar";
+        ret_val = "FLASHING LUNAR";
         break;
     case 6:
-        ret_val = "Yellow";
+        ret_val = "YELLOW";
         break;
     case 7:
-        ret_val = "Flashing Yellow";
+        ret_val = "FLASHING YELLOW";
         break;
     case 8:
-        ret_val = "Green";
+        ret_val = "GREEN";
         break;
     case 9:
-        ret_val = "Flashing Green";
+        ret_val = "FLASHING GREEN";
         break;
     default:
         ret_val = "UNKNOWN";
@@ -49,31 +62,31 @@ std::string getSignalAspect(int arg)
 
 int getAspectFromName(std::string arg_name) {
     int ret_val = 0;
-    if (arg_name.compare("dark") == 0) {
+    if (arg_name.compare("DARK") == 0) {
         ret_val = 1;
     }
-    else if (arg_name.compare("red") == 0) {
+    else if (arg_name.compare("RED") == 0) {
         ret_val = 2;
     }
-    else if (arg_name.compare("flashing red") == 0) {
+    else if (arg_name.compare("FLASHING RED") == 0) {
         ret_val = 3;
     }
-    else if (arg_name.compare("flunar") == 0) {
+    else if (arg_name.compare("LUNAR") == 0) {
         ret_val = 4;
     }
-    else if (arg_name.compare("flashing lunar") == 0) {
+    else if (arg_name.compare("FLASHING LUNAR") == 0) {
         ret_val = 5;
     }
-    else if (arg_name.compare("yellow") == 0) {
+    else if (arg_name.compare("YELLOW") == 0) {
         ret_val = 6;
     }
-    else if (arg_name.compare("flashing yellow") == 0) {
+    else if (arg_name.compare("FLASHING YELLOW") == 0) {
         ret_val = 7;
     }
-    else if (arg_name.compare("green") == 0) {
+    else if (arg_name.compare("GREEN") == 0) {
         ret_val = 8;
     }
-    else if (arg_name.compare("flashing green") == 0) {
+    else if (arg_name.compare("FLASHING GREEN") == 0) {
         ret_val = 9;
     }
     return(ret_val);
@@ -127,47 +140,48 @@ int writeDataFile() {
 void showDataDispatcher() {
     std::string arg;
     std::cin >> arg;
+    std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
 
-    if (arg.compare(0, 2, "conf", 0, 2) == 0) {
+    if (arg.compare(0, 2, "CONF", 0, 2) == 0) {
         printConfiguration();
     }
-    else if (arg.compare(0, 2, "mac", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "MAC", 0, 2) == 0) {
         TheConfig.printMacAddr();
     }
-    else if (arg.compare(0, 2, "ip", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "IP", 0, 2) == 0) {
         TheConfig.printIpAddr();
     }
-    else if (arg.compare(0, 3, "server", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "SERVER", 0, 3) == 0) {
         TheConfig.printServerIpAddr();
     }
-    else if (arg.compare(0, 2, "board", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
         TheConfig.printBoards();
     }
-    else if (arg.compare(0, 2, "turnout", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "TURNOUT", 0, 2) == 0) {
         TheConfig.printQuadTurnouts();
     }
-    else if (arg.compare(0, 2, "qsensors", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "QXENSORS", 0, 2) == 0) {
         TheConfig.printQuadSensors();
     }
-    else if (arg.compare(0, 2, "dual", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "DUAL", 0, 2) == 0) {
         TheConfig.printDualTurnouts();
     }
-    else if (arg.compare(0, 3, "sensors", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "SENSORS", 0, 3) == 0) {
         TheConfig.printSensors();
     }
-    else if (arg.compare(0, 2, "signals", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "SIGNALS", 0, 2) == 0) {
         TheConfig.printSignals();
     }
-    else if (arg.compare(0, 3, "inputs", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "INPUTS", 0, 3) == 0) {
         TheConfig.printSignalInputs();
     }
-    else if (arg.compare(0, 2, "logic", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "LOGIC", 0, 2) == 0) {
         TheConfig.printSignalLogic();
     }
-    else if (arg.compare(0, 3, "indicators", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "INDICATORS", 0, 3) == 0) {
         TheConfig.printIndicators();
     }
-    else if (arg.compare(0, 2, "keyboard", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "KEYBOARD", 0, 2) == 0) {
         TheConfig.printKBTrack();
     }
     else {
@@ -229,25 +243,28 @@ void setBoard() {
     int val = 0;
     std::string arg;
     std::cin >> arg;
-    if (arg.compare(0, 2, "toggle", 0, 2) == 0) {
+
+    std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+    if (arg.compare(0, 2, "TOGGLE", 0, 2) == 0) {
         index = 0;
     }
-    else if (arg.compare(0, 2, "sensor", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "SENSOR", 0, 2) == 0) {
         index = 1;
     }
-    else if (arg.compare(0, 2, "turnout", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "TURNOUT", 0, 2) == 0) {
         index = 2;
     }
-    else if (arg.compare(0, 2, "indicator", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "INDICATOR", 0, 2) == 0) {
         index = 3;
     }
-    else if (arg.compare(0, 2, "signal", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "SIGNAL", 0, 2) == 0) {
         index = 4;
     }
-    else if (arg.compare(0, 2, "dual", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "DUAL", 0, 2) == 0) {
         index = 5;
     }
-    else if (arg.compare(0, 2, "relay", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "RELAY", 0, 2) == 0) {
         index = 6;
     }
     else {
@@ -275,7 +292,8 @@ void setTurnout() {
     pch = strtok(arg_in, " ");
     while ( pch != NULL ) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -285,7 +303,7 @@ void setTurnout() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch); 
             channel = std::stoi(arg, nullptr, 10);
@@ -295,12 +313,13 @@ void setTurnout() {
             }
         }
 
-        if (arg.compare(0, 2, "name", 0, 2) == 0) {
+        if (arg.compare(0, 2, "NAME", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             turnoutname = std::string(pch);
+            std::transform(turnoutname.begin(), turnoutname.end(), turnoutname.begin(), ::toupper);
         }
 
-        if (arg.compare(0, 2, "toggle", 0, 2) == 0) {
+        if (arg.compare(0, 2, "TOGGLE", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             toggle = std::stoi(arg, nullptr, 10);
@@ -337,7 +356,9 @@ void setQuadSensor() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -347,7 +368,7 @@ void setQuadSensor() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             channel = std::stoi(arg, nullptr, 10);
@@ -357,12 +378,13 @@ void setQuadSensor() {
             }
         }
 
-        if (arg.compare(0, 2, "name", 0, 2) == 0) {
+        if (arg.compare(0, 2, "NAME", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             sensorname = std::string(pch);
+            std::transform(sensorname.begin(), sensorname.end(), sensorname.begin(), ::toupper);
         }
 
-        if (arg.compare(0, 2, "sensor", 0, 2) == 0) {
+        if (arg.compare(0, 2, "SENSOR", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             sensor = std::stoi(arg, nullptr, 10);
@@ -398,7 +420,9 @@ void setSensor() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -408,7 +432,7 @@ void setSensor() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             channel = std::stoi(arg, nullptr, 10);
@@ -418,9 +442,10 @@ void setSensor() {
             }
         }
 
-        if (arg.compare(0, 2, "name", 0, 2) == 0) {
+        if (arg.compare(0, 2, "NAME", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             sensorname = std::string(pch);
+            std::transform(sensorname.begin(), sensorname.end(), sensorname.begin(), ::toupper);
         }
 
         pch = strtok(NULL, " ");
@@ -451,7 +476,9 @@ void setSignal() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -461,7 +488,7 @@ void setSignal() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             channel = std::stoi(arg, nullptr, 10);
@@ -471,14 +498,16 @@ void setSignal() {
             }
         }
 
-        if (arg.compare(0, 2, "name", 0, 2) == 0) {
+        if (arg.compare(0, 2, "NAME", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             signalname = std::string(pch);
+            std::transform(signalname.begin(), signalname.end(), signalname.begin(), ::toupper);
         }
 
-        if (arg.compare(0, 2, "lead", 0, 2) == 0) {
+        if (arg.compare(0, 2, "LEAD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             leadingsignalname = std::string(pch);
+            std::transform(leadingsignalname.begin(), leadingsignalname.end(), leadingsignalname.begin(), ::toupper);
         }
 
         pch = strtok(NULL, " ");
@@ -509,7 +538,9 @@ void setSignalInput() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "number", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "NUMBER", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             _number = std::stoi(arg, nullptr, 10);
@@ -519,7 +550,7 @@ void setSignalInput() {
             }
         }
 
-        if (arg.compare(0, 2, "mode", 0, 2) == 0) {
+        if (arg.compare(0, 2, "MODE", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             mode = std::stoi(arg, nullptr, 10);
@@ -529,7 +560,7 @@ void setSignalInput() {
             }
         }
 
-        if (arg.compare(0, 2, "index", 0, 2) == 0) {
+        if (arg.compare(0, 2, "INDEX", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             index = std::stoi(arg, nullptr, 10);
@@ -539,9 +570,10 @@ void setSignalInput() {
             }
         }
 
-        if (arg.compare(0, 2, "name", 0, 2) == 0) {
+        if (arg.compare(0, 2, "NAME", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             remotename = std::string(pch);
+            std::transform(remotename.begin(), remotename.end(), remotename.begin(), ::toupper);
         }
 
         pch = strtok(NULL, " ");
@@ -573,7 +605,9 @@ void setSignalLogic() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "signal", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "SIGNAL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             _signal = std::stoi(arg, nullptr, 10);
@@ -583,13 +617,16 @@ void setSignalLogic() {
             }
         }
 
-        if (arg.compare(0, 2, "aspect", 0, 2) == 0) {
+        if (arg.compare(0, 2, "ASPECT", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             aspectname = std::string(pch);
-            if (aspectname.compare(0, 2, "flashing", 0, 2) == 0) {
+            std::transform(aspectname.begin(), aspectname.end(), aspectname.begin(), ::toupper);
+            if (aspectname.compare(0, 2, "FLASHING", 0, 2) == 0) {
                 pch = strtok(NULL, " ");
+                std::string aspectname2 = std::string(pch);
+                std::transform(aspectname2.begin(), aspectname2.end(), aspectname2.begin(), ::toupper);
                 aspectname.append(" ");
-                aspectname.append(std::string(pch));
+                aspectname.append(aspectname2);
             }
             aspect = getAspectFromName(aspectname);
             if (aspect == 0) {
@@ -598,7 +635,7 @@ void setSignalLogic() {
             }
         }
 
-        if (arg.compare(0, 2, "on", 0, 2) == 0) {
+        if (arg.compare(0, 2, "ON", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             NOR[nnor] = std::stoi(arg, nullptr, 10);
@@ -609,7 +646,7 @@ void setSignalLogic() {
             }
         }
 
-        if (arg.compare(0, 2, "off", 0, 2) == 0) {
+        if (arg.compare(0, 2, "OFF", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             NOR[nnor] = std::stoi(arg, nullptr, 10)+64;
@@ -649,7 +686,9 @@ void setIndicator() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -659,7 +698,7 @@ void setIndicator() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             channel = std::stoi(arg, nullptr, 10);
@@ -669,7 +708,7 @@ void setIndicator() {
             }
         }
 
-        if (arg.compare(0, 2, "switch", 0, 2) == 0) {
+        if (arg.compare(0, 2, "SWITCH", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             _switch = std::stoi(arg, nullptr, 10);
@@ -679,7 +718,7 @@ void setIndicator() {
             }
         }
 
-        if (arg.compare(0, 2, "sensor", 0, 2) == 0) {
+        if (arg.compare(0, 2, "SENSOR", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             _sensor = std::stoi(arg, nullptr, 10);
@@ -718,7 +757,9 @@ void setKeyboard() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "track", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "TRACK", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             track = std::stoi(arg, nullptr, 10);
@@ -728,7 +769,7 @@ void setKeyboard() {
             }
         }
 
-        if (arg.compare(0, 2, "on", 0, 2) == 0) {
+        if (arg.compare(0, 2, "ON", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             int index = std::stoi(arg, nullptr, 10);
@@ -742,7 +783,7 @@ void setKeyboard() {
             }
         }
 
-        if (arg.compare(0, 2, "clear", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CLEAR", 0, 2) == 0) {
             clear = 1;
         }
 
@@ -772,7 +813,9 @@ void deleteTurnout() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -782,7 +825,7 @@ void deleteTurnout() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             channel = std::stoi(arg, nullptr, 10);
@@ -818,6 +861,7 @@ void deleteQsensor() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
+
         channel = std::stoi(arg, nullptr, 10);
         if (channel == 0) {
             std::cout << "%%deleteQsensor - syntax error" << std::endl;
@@ -848,7 +892,9 @@ void deleteSensor() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -858,7 +904,7 @@ void deleteSensor() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             channel = std::stoi(arg, nullptr, 10);
@@ -894,7 +940,9 @@ void deleteSignal() {
     pch = strtok(arg_in, " ");
     while (pch != NULL) {
         arg = std::string(pch);
-        if (arg.compare(0, 2, "board", 0, 2) == 0) {
+        std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
+
+        if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             board = std::stoi(arg, nullptr, 10);
@@ -904,7 +952,7 @@ void deleteSignal() {
             }
         }
 
-        if (arg.compare(0, 2, "channel", 0, 2) == 0) {
+        if (arg.compare(0, 2, "CHANNEL", 0, 2) == 0) {
             pch = strtok(NULL, " ");
             arg = std::string(pch);
             channel = std::stoi(arg, nullptr, 10);
@@ -931,44 +979,45 @@ void deleteSignal() {
 void setDataDispatcher() {
     std::string arg;
     std::cin >> arg;
+    std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
 
-    if (arg.compare(0, 2, "mac", 0, 2) == 0) {
+    if (arg.compare(0, 2, "MAC", 0, 2) == 0) {
         setMacAddr();
     }
-    else if (arg.compare(0, 2, "ip", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "IP", 0, 2) == 0) {
         setIpAddr();
     }
-    else if (arg.compare(0, 3, "server", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "SERVER", 0, 3) == 0) {
         setServerIpAddr();
     }
-    else if (arg.compare(0, 2, "board", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "BOARD", 0, 2) == 0) {
         setBoard();
     }
-    else if (arg.compare(0, 2, "turnout", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "TURNOUT", 0, 2) == 0) {
         setTurnout();
     }
-    else if (arg.compare(0, 2, "qsensors", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "QSENSORS", 0, 2) == 0) {
         setQuadSensor();
     }
-    else if (arg.compare(0, 2, "dual", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "DUAL", 0, 2) == 0) {
 //        TheConfig.printDualTurnouts();
     }
-    else if (arg.compare(0, 3, "sensors", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "SENSORS", 0, 3) == 0) {
         setSensor();
     }
-    else if (arg.compare(0, 2, "signals", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "SIGNALS", 0, 2) == 0) {
         setSignal();
     }
-    else if (arg.compare(0, 3, "inputs", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "INPUTS", 0, 3) == 0) {
         setSignalInput();
     }
-    else if (arg.compare(0, 2, "logic", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "LOGIC", 0, 2) == 0) {
         setSignalLogic();
     }
-    else if (arg.compare(0, 3, "indicators", 0, 3) == 0) {
+    else if (arg.compare(0, 3, "INDICATORS", 0, 3) == 0) {
         setIndicator();
     }
-    else if (arg.compare(0, 2, "keyboard", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "KEYBOARD", 0, 2) == 0) {
         setKeyboard();
     }
     else {
@@ -979,17 +1028,18 @@ void setDataDispatcher() {
 void deleteDataDispatcher() {
     std::string arg;
     std::cin >> arg;
+    std::transform(arg.begin(), arg.end(), arg.begin(), ::toupper);
 
-    if (arg.compare(0, 2, "turnout", 0, 2) == 0) {
+    if (arg.compare(0, 2, "TURNOUT", 0, 2) == 0) {
         deleteTurnout();
     }
-    else if (arg.compare(0, 2, "qsensor", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "QSENSOR", 0, 2) == 0) {
         deleteQsensor();
     }
-    else if (arg.compare(0, 2, "sensor", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "SENSOR", 0, 2) == 0) {
         deleteSensor();
     }
-    else if (arg.compare(0, 2, "signal", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "SIGNAL", 0, 2) == 0) {
         deleteSignal();
     }
 }
@@ -1027,27 +1077,27 @@ int commandLine() {
     while (requestRun == 1) {
         std::cout << "Config> ";
         std::cin >> cmdIn;
+        std::transform(cmdIn.begin(), cmdIn.end(), cmdIn.begin(), ::toupper);
+//        std::string cmdRoot = cmdIn.substr(0, cmdIn.find(" "));
 
-        std::string cmdRoot = cmdIn.substr(0, cmdIn.find(" "));
-
-        if ((cmdIn.compare("exit") == 0) || (cmdIn.compare("quit") == 0)) {
+        if ((cmdIn.compare("EXIT") == 0) || (cmdIn.compare("QUIT") == 0)) {
             requestRun = 0;
         }
-        else if (cmdIn.compare("open") == 0) {
+        else if (cmdIn.compare("OPEN") == 0) {
             std::string fileName;
             std::cin >> fileName;
             std::cout << fileName << std::endl;
         }
-        else if (cmdIn.compare("show") == 0) {
+        else if (cmdIn.compare("SHOW") == 0) {
             showDataDispatcher();
         }
-        else if (cmdIn.compare("set") == 0) {
+        else if (cmdIn.compare("SET") == 0) {
             setDataDispatcher();
         }
-        else if (cmdIn.compare("delete") == 0) {
+        else if (cmdIn.compare("DELETE") == 0) {
             deleteDataDispatcher();
         }
-        else if (cmdIn.compare("help") == 0) {
+        else if (cmdIn.compare("HELP") == 0) {
             printHelp();
         }
     }
@@ -1055,11 +1105,41 @@ int commandLine() {
     return(0);
 }
 
+int initConfig() {
+
+    std::string dir_name = "%USERPROFILE%\\AppData\\Local\\CMRS";
+#ifdef _WIN32
+    int status = mkdir(dir_name.c_str());
+#else
+    int status = mkdir(dir_name.c_str(), 0777);
+#endif
+
+    if (status == 0) {
+        std::cout << "Directory created successfully." << std::endl;
+    }
+    else {
+        std::cout << "Error creating directory: ";
+        switch (errno) {
+        case EEXIST:
+            std::cout << "Directory already exists." << std::endl;
+            break;
+        case ENOENT:
+            std::cout << "Parent directory does not exist." << std::endl;
+            break;
+        default:
+            std::cout << "Unknown error." << std::endl;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     std::cout << "Number of arguments " << argc << std::endl;
     
  //   TheConfig = new CMRSconfig();
+    initConfig();
 
     getData();
 
