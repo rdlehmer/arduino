@@ -125,6 +125,11 @@ public:
 
 	void writeNOR();
 
+	std::string getWorkingDir();
+	void setWorkingDir(std::string);
+	std::string getConfigDir();
+	void setConfigDir(std::string);
+
 private:
 	int macaddr[6];
 	int ipaddr[4];
@@ -151,6 +156,9 @@ private:
 	int byteDone = 0;
 
 	std::ofstream outfile;
+
+	std::string ConfigDir;
+	std::string WorkingDir;
 
 };
 

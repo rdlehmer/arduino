@@ -7,6 +7,7 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
+#include <Windows.h>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -92,14 +93,17 @@ int getAspectFromName(std::string arg_name) {
     return(ret_val);
 }
 
-int getData()
-{
+int getData(std::string arg_str) {
+
 //   FILE* fp = fopen("..\\..\\..\\..\\..\\CMRS_CP_2560\\station-conf\\64.TXT", "r");
     
-    std::ifstream file1("..\\..\\..\\CMRS_CP_2560\\station-conf\\64.TXT");
+//    std::ifstream file1("..\\..\\..\\CMRS_CP_2560\\station-conf\\64.TXT");
+
+    std::ifstream file1(arg_str.c_str());
 
     if (!(file1.is_open())) {
-        std::perror("Can't open file");
+        std::cout << "Can't open file " << arg_str << std::endl;
+//        std::perror("Can't open file ");
         return 1;
     }
 
@@ -113,6 +117,25 @@ int getData()
     file1.close();
 
     return 0;
+}
+
+void openFile() {
+    std::string arg;
+    std::cin >> arg;
+
+    std::string workingfile = TheConfig.getWorkingDir() + +"\\" + arg;
+    getData(workingfile);
+
+}
+
+void writeConfFile() {
+    std::string working_dir = TheConfig.getWorkingDir();
+    std::string dir_name = TheConfig.getConfigDir();
+    std::string config_file = dir_name + "\\CMRSconfig.dat";
+    std::ofstream fsout;
+    fsout.open(config_file.c_str(), std::fstream::out);
+    fsout << "#WD " << working_dir << std::endl;
+    fsout.close();
 }
 
 void printConfiguration() {
@@ -800,6 +823,39 @@ void setKeyboard() {
     }
 }
 
+void setDirectory() {
+    char arg_in[256];
+    std::string arg;
+//    std::cin >> arg;
+    std::cin.getline(arg_in,256);
+    arg = std::string(arg_in);
+
+    std::string oldWD = TheConfig.getWorkingDir();
+    arg = arg.substr(1);
+    std::cout << arg.substr(1, 1) << std::endl;
+
+    if ( strcmp((arg.substr(1,1)).c_str(),":") == 0 ) {
+ //   if (arg.compare(2, 1, ":", 1, 1) == 0) {
+        // there is a device declaration in the new working directory
+        TheConfig.setWorkingDir(arg);
+        writeConfFile();
+    }
+    else {
+        // there isn't a device declaration in the new working directory
+        std::string newWD;
+        if ( strcmp((arg.substr(0,1)).c_str(),"\\") == 0 ) {
+  //       if (arg.compare(1, 1, "\\") == 0) {
+            newWD = oldWD.substr(0, 2) + arg;
+            TheConfig.setWorkingDir(newWD);
+            writeConfFile();
+        }
+        else {
+            std::cout << "%%setDirectory - syntax error" << std::endl;
+        }
+    }
+}
+
+
 void deleteTurnout() {
     int board = 0;
     int channel = 0;
@@ -1020,6 +1076,9 @@ void setDataDispatcher() {
     else if (arg.compare(0, 2, "KEYBOARD", 0, 2) == 0) {
         setKeyboard();
     }
+    else if (arg.compare(0, 2, "DIRECTORY", 0, 2) == 0) {
+        setDirectory();
+    }
     else {
         std::cout << "%%set - syntax error." << std::endl;
     }
@@ -1073,20 +1132,21 @@ void printHelp() {
 int commandLine() {
     static int requestRun = 1;
     std::string cmdIn;
-//    char temp[256];
+    //    char temp[256];
     while (requestRun == 1) {
         std::cout << "Config> ";
         std::cin >> cmdIn;
         std::transform(cmdIn.begin(), cmdIn.end(), cmdIn.begin(), ::toupper);
-//        std::string cmdRoot = cmdIn.substr(0, cmdIn.find(" "));
+        //        std::string cmdRoot = cmdIn.substr(0, cmdIn.find(" "));
 
         if ((cmdIn.compare("EXIT") == 0) || (cmdIn.compare("QUIT") == 0)) {
             requestRun = 0;
         }
         else if (cmdIn.compare("OPEN") == 0) {
-            std::string fileName;
-            std::cin >> fileName;
-            std::cout << fileName << std::endl;
+//            std::string fileName;
+//            std::cin >> fileName;
+//            std::cout << fileName << std::endl;
+            openFile();
         }
         else if (cmdIn.compare("SHOW") == 0) {
             showDataDispatcher();
@@ -1105,14 +1165,58 @@ int commandLine() {
     return(0);
 }
 
+void initConfigFile() {
+    std::string dir_name = TheConfig.getConfigDir();
+    std::string config_file = dir_name + "\\CMRSconfig.dat";
+    std::string working_dir = std::string(getenv("USERPROFILE")) + "\\Desktop";
+
+    std::cout << "Config File = " << config_file << std::endl;
+    std::cout << "Working Dir = " << working_dir << std::endl;
+    //    std::cout << "initConfigFile " << config_file << std::endl;
+    std::ifstream fs;
+    fs.open(config_file.c_str(), std::fstream::in);
+    if (fs.good()) {
+        std::cout << "fs.good" << std::endl;
+        char arg_in[256];
+        while (!(fs.eof())) {
+            fs.getline(arg_in, 256, '\n');
+            if (fs.gcount() != 0) {
+                std::cout << std::string(arg_in) << std::endl;
+                char* pch = strtok(arg_in, " ");
+                std::string arg = std::string(pch);
+                if (arg.compare(0, 3, "#WD", 0, 3) == 0) {
+                    pch = strtok(NULL, " ");
+                    TheConfig.setWorkingDir(std::string(pch));
+                }
+            }
+        }
+    }
+        // get working directory
+    else {
+        std::cout << "fs no good " << config_file << std::endl;
+        fs.close();
+        std::ofstream fsout;
+        fsout.open(config_file.c_str(), std::fstream::out);
+        fsout << "#WD " << working_dir << std::endl;
+        fsout.close();
+        TheConfig.setWorkingDir(working_dir);
+    }
+
+}
+
 int initConfig() {
 
-    std::string dir_name = "%USERPROFILE%\\AppData\\Local\\CMRS";
+    char* adir;
+    adir = getenv("APPDATA");
+    std::string appdatadir = std::string(adir);
+    std::string dir_name = appdatadir+"\\CMRS";
+    std::cout << "Creating directory " << dir_name << std::endl;
 #ifdef _WIN32
     int status = mkdir(dir_name.c_str());
 #else
     int status = mkdir(dir_name.c_str(), 0777);
 #endif
+    TheConfig.setConfigDir(dir_name);
 
     if (status == 0) {
         std::cout << "Directory created successfully." << std::endl;
@@ -1140,8 +1244,9 @@ int main(int argc, char* argv[])
     
  //   TheConfig = new CMRSconfig();
     initConfig();
+    initConfigFile();
 
-    getData();
+  //  getData();
 
     commandLine();
 

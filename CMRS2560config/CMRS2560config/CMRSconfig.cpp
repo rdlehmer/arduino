@@ -840,3 +840,20 @@ int CMRSconfig::writeData() {
 
 	return 0;
 }
+
+void CMRSconfig::setConfigDir(std::string arg) {
+	ConfigDir = arg;
+}
+
+void CMRSconfig::setWorkingDir(std::string arg) {
+	WorkingDir = arg;
+	std::cout << "Setting Working Directory " << WorkingDir << std::endl;
+}
+
+std::string CMRSconfig::getConfigDir() {
+	return ConfigDir;
+}
+
+std::string CMRSconfig::getWorkingDir() {
+	return WorkingDir;
+}
