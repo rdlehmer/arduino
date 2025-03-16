@@ -18,6 +18,7 @@ public:
 	int get_sensor();
 	int get_sensornum();
 	std::string get_name();
+	void clear();
 
 private:
 	int board;

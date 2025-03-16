@@ -9,6 +9,8 @@ public:
 	void set_mode(int, int);
 	int get_mode(int);
 
+	void clear();
+
 private:
 	int mode[16];
 };

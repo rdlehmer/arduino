@@ -23,3 +23,11 @@ int KBTrack::get_mode(int index)
 {
 	return mode[index];
 }
+
+void KBTrack::clear() {
+	int i;
+	for (i = 0; i < 16; i++)
+	{
+		mode[i] = 0;
+	}
+}

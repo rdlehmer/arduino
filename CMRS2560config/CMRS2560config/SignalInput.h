@@ -16,6 +16,7 @@ public:
 	int get_mode();
 	int get_index();
 	std::string get_name();
+	void clear();
 
 private:
 	int mode;

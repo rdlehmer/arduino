@@ -51,3 +51,9 @@ void Signal::add_leadingsignal(char arg)
 {
 	leadingsignal.push_back(arg);
 }
+
+void Signal::clear() {
+	active = 0;
+	signalhead = "";
+	leadingsignal = "";
+}

@@ -30,3 +30,8 @@ int Indicator::get_sensor()
 {
 	return sensor_num;
 }
+
+void Indicator::clear() {
+	sw_number = 0;
+	sensor_num = 0;
+}

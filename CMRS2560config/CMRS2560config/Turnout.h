@@ -16,6 +16,8 @@ public:
 	int get_toggle();
 	std::string get_name();
 
+	void clear();
+
 private:
 	int toggle;
 	std::string name;

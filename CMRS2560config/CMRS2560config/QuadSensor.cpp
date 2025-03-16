@@ -57,3 +57,10 @@ void QuadSensor::add_name(char arg)
 {
 	name.push_back(arg);
 }
+
+void QuadSensor::clear() {
+	board = 0;
+	sensor = 0;
+	sensor_num = 0;
+	name = "";
+}

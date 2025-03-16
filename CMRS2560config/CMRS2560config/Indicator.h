@@ -11,6 +11,8 @@ public:
 	int get_switch();
 	int get_sensor();
 
+	void clear();
+
 private:
 	int sw_number;
 	int sensor_num;

@@ -95,25 +95,18 @@ int getAspectFromName(std::string arg_name) {
 
 int getData(std::string arg_str) {
 
-//   FILE* fp = fopen("..\\..\\..\\..\\..\\CMRS_CP_2560\\station-conf\\64.TXT", "r");
-    
-//    std::ifstream file1("..\\..\\..\\CMRS_CP_2560\\station-conf\\64.TXT");
-
     std::ifstream file1(arg_str.c_str());
 
     if (!(file1.is_open())) {
         std::cout << "Can't open file " << arg_str << std::endl;
-//        std::perror("Can't open file ");
         return 1;
     }
 
     std::string dataIn;
 
     while (std::getline(file1, dataIn)) {
- //       std::cout << dataIn << std::endl;
         TheConfig.parse_data(dataIn);
     }
- //   fclose(fp);
     file1.close();
 
     return 0;
@@ -123,6 +116,7 @@ void openFile() {
     std::string arg;
     std::cin >> arg;
 
+    TheConfig.clear();
     std::string workingfile = TheConfig.getWorkingDir() + +"\\" + arg;
     getData(workingfile);
 
@@ -156,7 +150,12 @@ void printConfiguration() {
 
 
 int writeDataFile() {
-    TheConfig.writeData();
+    std::string arg;
+    std::cin >> arg;
+
+    std::string workingfile = TheConfig.getWorkingDir() + +"\\" + arg;
+
+    TheConfig.writeData(workingfile);
     return(0);
 }
 
@@ -1132,21 +1131,19 @@ void printHelp() {
 int commandLine() {
     static int requestRun = 1;
     std::string cmdIn;
-    //    char temp[256];
     while (requestRun == 1) {
         std::cout << "Config> ";
         std::cin >> cmdIn;
         std::transform(cmdIn.begin(), cmdIn.end(), cmdIn.begin(), ::toupper);
-        //        std::string cmdRoot = cmdIn.substr(0, cmdIn.find(" "));
 
         if ((cmdIn.compare("EXIT") == 0) || (cmdIn.compare("QUIT") == 0)) {
             requestRun = 0;
         }
         else if (cmdIn.compare("OPEN") == 0) {
-//            std::string fileName;
-//            std::cin >> fileName;
-//            std::cout << fileName << std::endl;
             openFile();
+        }
+        else if (cmdIn.compare("WRITE") == 0) {
+            writeDataFile();
         }
         else if (cmdIn.compare("SHOW") == 0) {
             showDataDispatcher();

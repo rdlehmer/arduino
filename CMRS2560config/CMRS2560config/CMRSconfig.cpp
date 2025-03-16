@@ -3,29 +3,60 @@
 #include <iostream>
 
 
-CMRSconfig::CMRSconfig()
-{
+CMRSconfig::CMRSconfig() {
 	int i;
-	for (i = 0; i < 6; i++) {
-		macaddr[i] = 0;
-		boards[i] = 0;
-	}
 	for (i = 0; i < 4; i++) {
 		ipaddr[i] = 0;
 		serveripaddr[i] = 0;
+	}
+	for (i = 0; i < 6; i++) {
+		macaddr[i] = 0;
+	}
+	for (i = 0; i < 7; i++) {
+		boards[i] = 0;
+	}
+	for (i = 0; i < 8; i++) {
+		dualpos[i] = 0;
 	}
 	for (i = 0; i < 16; i++) {
 		quadpos[i] = 0;
 		power[i] = 0;
 	}
-	for (i = 0; i < 8; i++) {
-		dualpos[i] = 0;
-	}
 }
 
-CMRSconfig::~CMRSconfig()
-{
+CMRSconfig::~CMRSconfig() {
 
+}
+
+void CMRSconfig::clear() {
+	int i;
+	for (i = 0; i < 4; i++) {
+		ipaddr[i] = 0;
+		serveripaddr[i] = 0;
+	}
+	for (i = 0; i < 6; i++) {
+		macaddr[i] = 0;
+	}
+	for (i = 0; i < 7; i++) {
+		boards[i] = 0;
+	}
+	for (i = 0; i < 8; i++) {
+		dualpos[i] = 0;
+		dualTurnout[i].clear();
+		indicator[i].clear();
+	}
+	for (i = 0; i < 16; i++) {
+		quadpos[i] = 0;
+		power[i] = 0;
+		quadTurnout[i].clear();
+		quadSensor[i].clear();
+		signalLogic[i].clear();
+		signal[i].clear();
+		kbTrack[i].clear();
+	}
+	for (i = 0; i < 32; i++) {
+		signalInput[i].clear();
+	}
 }
 
 void CMRSconfig::parse_data(const std::string& arg)
@@ -787,9 +818,9 @@ void CMRSconfig::writeNOR() {
 		sindex++;
 	}
 }
-int CMRSconfig::writeData() {
-	outfile.open("..\\..\\..\\CMRS_CP_2560\\station-conf\\64.out", std::ofstream::out);
+int CMRSconfig::writeData(std::string arg_str) {
 
+	outfile.open(arg_str.c_str(), std::ofstream::out);
 	if (!(outfile.is_open())) {
 		std::perror("Can't open outfile");
 		return 1;

@@ -37,3 +37,8 @@ void Turnout::add_name(char arg)
 //	std::cout << arg;
 	name.push_back(arg);
 }
+
+void Turnout::clear() {
+	toggle = 0;
+	name = "";
+}

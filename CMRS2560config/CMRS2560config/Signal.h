@@ -19,6 +19,8 @@ public:
 	std::string get_signalhead();
 	std::string get_leadingsignal();
 
+	void clear();
+
 private:
 	int active;
 	std::string signalhead;

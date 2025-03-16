@@ -46,3 +46,9 @@ void SignalInput::add_name(char arg)
 {
 	name.push_back(arg);
 }
+
+void SignalInput::clear() {
+	mode = 0;
+	index = 0;
+	name = "";
+}

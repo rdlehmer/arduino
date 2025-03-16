@@ -62,7 +62,7 @@ public:
 	~CMRSconfig();
 
 	void parse_data(const std::string&);
-	int writeData();
+	int writeData(std::string);
 
 	void writePad(int, int);
 
@@ -129,6 +129,8 @@ public:
 	void setWorkingDir(std::string);
 	std::string getConfigDir();
 	void setConfigDir(std::string);
+
+	void clear();
 
 private:
 	int macaddr[6];

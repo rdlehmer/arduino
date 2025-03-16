@@ -24,6 +24,8 @@ public:
 	int get_numNOR();
 	int get_NOR(int);
 
+	void clear();
+
 
 private:
 	int signal;

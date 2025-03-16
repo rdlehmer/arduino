@@ -67,3 +67,10 @@ int SignalLogic::get_NOR(int index)
 void SignalLogic::clear_NOR() {
 	NOR.clear();
 }
+
+void SignalLogic::clear() {
+	signal = 0;
+	aspect = 0;
+	firstNOR = 0;
+	numNOR = 0;
+}
