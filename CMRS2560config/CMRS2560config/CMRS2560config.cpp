@@ -418,7 +418,7 @@ void setQuadSensor() {
         pch = strtok(NULL, " ");
     }
     if ((board != 0) && (channel != 0) && (sensor != 0) && (sensorname.length() != 0) &&
-        (channel > 0) && (channel < 5) && (board > 0) && (board < 5)) {
+        (channel > 0) && (channel < 9) && (board > 0) && (board < 5)) {
         TheConfig.setQuadSensor(board, channel, sensor, sensorname);
     }
     else {
@@ -750,6 +750,12 @@ void setIndicator() {
             }
         }
         pch = strtok(NULL, " ");
+    }
+    if (_switch == -1) {
+        _switch = 0;
+    }
+    if (_sensor == -1) {
+        _sensor = 0;
     }
     if ((board != 0) && (channel != 0) && !((_switch != 0) && (_sensor != 0)) &&
         (channel > 0) && (channel < 5) && (board > 0) && (board < 3)) {
