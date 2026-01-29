@@ -182,7 +182,7 @@ void showDataDispatcher() {
     else if (arg.compare(0, 2, "TURNOUT", 0, 2) == 0) {
         TheConfig.printQuadTurnouts();
     }
-    else if (arg.compare(0, 2, "QXENSORS", 0, 2) == 0) {
+    else if (arg.compare(0, 2, "QSENSORS", 0, 2) == 0) {
         TheConfig.printQuadSensors();
     }
     else if (arg.compare(0, 2, "DUAL", 0, 2) == 0) {

@@ -415,9 +415,9 @@ void CMRSconfig::printQuadSensors() {
 	std::cout << "Quad Sensors:" << std::endl;
 	for (int i = 0; i < 16; i++) {
 		if ((quadSensor[i].get_board() != 0) && (quadSensor[i].get_sensor() != 0)) {
-			std::cout << "  Sensor " << i << " Board " << quadSensor[i].get_board();
-			std::cout << " Sensor " << quadSensor[i].get_sensor() << " Name " << quadSensor[i].get_name();
-			std::cout << " Sensor # " << quadSensor[i].get_sensornum() << std::endl;
+			std::cout << " Sensor # " << quadSensor[i].get_sensornum() << " Board " << quadSensor[i].get_board();
+			std::cout << " Channel " << quadSensor[i].get_sensor() << " Name " << quadSensor[i].get_name();
+			std::cout << std::endl;
 		}
 	}
 }
@@ -453,7 +453,7 @@ void CMRSconfig::setQuadSensor(int arg_board, int arg_channel, int arg_sensor, s
 }
 
 void CMRSconfig::deleteQuadSensor(int arg_channel) {
-	for (int i = 0; CMRS_QUADSENSOR_NUMBER; i++) {
+	for (int i = 0; i < CMRS_QUADSENSOR_NUMBER; i++) {
 		if (quadSensor[i].get_sensornum() == arg_channel) {
 			quadSensor[i].set_board(0);
 			quadSensor[i].set_sensor(0);
