@@ -684,8 +684,10 @@ void CMRSconfig::setSignalLogic(int arg_signal, int arg_aspect, int arg_nnor, in
 void CMRSconfig::printIndicators() {
 	std::cout << "Indicators:" << std::endl;
 	for (int i = 0; i < 8; i++) {
-		std::cout << " Indicator " << (i / 4) + 1 << "/" << (i % 4) + 1;
-		std::cout << " Switch " << indicator[i].get_switch() << " Sensor " << indicator[i].get_sensor() << std::endl;
+		if ((indicator[i].get_switch() != 0) || (indicator[i].get_sensor() != 0)) {
+			std::cout << " Indicator " << (i / 4) + 1 << "/" << (i % 4) + 1;
+			std::cout << " Switch " << indicator[i].get_switch() << " Sensor " << indicator[i].get_sensor() << std::endl;
+		}
 	}
 }
 
